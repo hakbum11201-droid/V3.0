@@ -1,38 +1,77 @@
 from __future__ import annotations
 
 import csv
-from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List
 
 from .models import Candle
 
 
-def load_candles_csv(path: str) -> Dict[str, List[Candle]]:
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"csv not found: {p}")
+def load_candles_from_csv(path: str, default_market: str = "KRW-BTC") -> List[Candle]:
+    csv_path = Path(path)
 
-    by_market: Dict[str, List[Candle]] = defaultdict(list)
-    with p.open("r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        required = {"market", "timestamp", "open", "high", "low", "close", "volume"}
-        if not required.issubset(set(reader.fieldnames or [])):
-            raise ValueError(f"csv required columns: {sorted(required)}")
+    if not csv_path.exists():
+        raise FileNotFoundError(f"CSV file not found: {csv_path}")
+
+    candles: List[Candle] = []
+
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as file:
+        reader = csv.DictReader(file)
+
+        if reader.fieldnames is None:
+            raise ValueError(f"CSV has no header: {csv_path}")
 
         for row in reader:
-            candle = Candle(
-                market=row["market"],
-                timestamp=row["timestamp"],
-                open=float(row["open"]),
-                high=float(row["high"]),
-                low=float(row["low"]),
-                close=float(row["close"]),
-                volume=float(row["volume"]),
+            normalized = _normalize_row(row, default_market)
+            candles.append(
+                Candle(
+                    market=normalized["market"],
+                    timestamp=normalized["timestamp"],
+                    open=float(normalized["open"]),
+                    high=float(normalized["high"]),
+                    low=float(normalized["low"]),
+                    close=float(normalized["close"]),
+                    volume=float(normalized["volume"]),
+                )
             )
-            by_market[candle.market].append(candle)
 
-    if not by_market:
-        raise ValueError("csv has no candles")
+    if not candles:
+        raise ValueError(f"CSV has no candle rows: {csv_path}")
 
-    return dict(by_market)
+    return candles
+
+
+def _normalize_row(row: Dict[str, str], default_market: str) -> Dict[str, str]:
+    return {
+        "market": _get_value(row, ["market", "symbol"], default_market),
+        "timestamp": _get_value(row, ["timestamp", "time", "date", "datetime"], ""),
+        "open": _get_value(row, ["open", "opening_price"], "0"),
+        "high": _get_value(row, ["high", "high_price"], "0"),
+        "low": _get_value(row, ["low", "low_price"], "0"),
+        "close": _get_value(row, ["close", "trade_price", "price"], "0"),
+        "volume": _get_value(row, ["volume", "candle_acc_trade_volume"], "0"),
+    }
+
+
+def _get_value(row: Dict[str, str], keys: List[str], default: str) -> str:
+    for key in keys:
+        if key in row and row[key] not in (None, ""):
+            return str(row[key]).strip()
+
+    return default
+
+
+def split_candles_by_market(candles: List[Candle]) -> Dict[str, List[Candle]]:
+    grouped: Dict[str, List[Candle]] = {}
+
+    for candle in candles:
+        grouped.setdefault(candle.market, []).append(candle)
+
+    return grouped
+
+
+def last_close(candles: List[Candle]) -> float:
+    if not candles:
+        raise ValueError("candles is empty")
+
+    return candles[-1].close

@@ -1,139 +1,229 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from typing import Dict, Any
+from dataclasses import asdict
+from typing import Any, Dict, List
 
-from .config_loader import load_config
-from .data import load_candles_csv
-from .regime import RegimeFilter
-from .strategy import MultiFactorStrategy
-from .risk import RiskManager
-from .loss_filter import LossPatternFilter
 from .broker import PaperBroker
-from .state import StateStore
-from .jsonl import JsonlLogger
+from .config_loader import load_config
+from .data import load_candles_from_csv, split_candles_by_market
+from .jsonl import write_json, write_jsonl
+from .models import Candle, Trade
+from .risk import RiskManager
+from .strategy import generate_signal
 
 
-class BacktestEngine:
-    def __init__(self, cfg: Dict[str, Any]):
-        self.cfg = cfg
-        self.strategy = MultiFactorStrategy(cfg)
-        self.regime = RegimeFilter(cfg["regime"])
-        self.risk = RiskManager(cfg)
-        self.loss_filter = LossPatternFilter(cfg)
-        self.broker = PaperBroker(cfg)
+def run_backtest(
+    config_path: str = "config/config.json",
+    csv_path: str = "data/sample_ohlcv.csv",
+) -> Dict[str, Any]:
+    config = load_config(config_path)
 
-        paths = cfg["paths"]
-        self.trades_log = JsonlLogger(Path(paths["logs_dir"]) / "trades.jsonl")
-        self.decisions_log = JsonlLogger(Path(paths["logs_dir"]) / "decisions.jsonl")
-        self.state_store = StateStore(Path(paths["runtime_dir"]) / "state.json")
-        self.state = self.state_store.load()
+    candles = load_candles_from_csv(csv_path)
+    candles_by_market = split_candles_by_market(candles)
 
-    def run(self, csv_path: str = "data/sample_ohlcv.csv") -> Dict[str, Any]:
-        by_market = load_candles_csv(csv_path)
-        btc_market = self.cfg["regime"].get("btc_market", "KRW-BTC")
+    portfolio_config = config.get("portfolio", {})
+    risk_config = config.get("risk", {})
+    strategy_config = config.get("strategy", {})
+    paths_config = config.get("paths", {})
 
-        min_len = min(len(v) for v in by_market.values())
-        histories = {m: [] for m in by_market}
-        last_prices = {m: 0.0 for m in by_market}
+    starting_cash_krw = float(portfolio_config.get("starting_cash_krw", 1_000_000))
+    fee_rate = float(risk_config.get("fee_rate", 0.0005))
+    slippage_pct = float(risk_config.get("slippage_pct", 0.05))
+    min_order_krw = float(risk_config.get("min_order_krw", 5_000))
+    max_holding_bars = int(strategy_config.get("max_holding_bars", 48))
 
-        for i in range(min_len):
-            for market, series in by_market.items():
-                candle = series[i]
-                histories[market].append(candle)
-                last_prices[market] = candle.close
+    trades_path = paths_config.get("trades_log", "logs/trades.jsonl")
+    decisions_path = paths_config.get("decisions_log", "logs/decisions.jsonl")
+    state_path = paths_config.get("state", "runtime/state.json")
 
-            btc_hist = histories.get(btc_market) or next(iter(histories.values()))
-            regime = self.regime.classify(btc_hist)
+    broker = PaperBroker(
+        starting_cash_krw=starting_cash_krw,
+        fee_rate=fee_rate,
+        slippage_pct=slippage_pct,
+        min_order_krw=min_order_krw,
+    )
 
-            for market in self.cfg["markets"]:
-                if market not in histories or not histories[market]:
-                    continue
+    risk_manager = RiskManager.from_config(config)
 
-                candle = histories[market][-1]
+    last_prices: Dict[str, float] = {}
 
-                trade = self.broker.update_position(candle)
-                if trade:
-                    self._record_trade(trade)
-                    continue
+    for market, market_candles in candles_by_market.items():
+        _run_market_backtest(
+            market=market,
+            candles=market_candles,
+            config=config,
+            broker=broker,
+            risk_manager=risk_manager,
+            max_holding_bars=max_holding_bars,
+            last_prices=last_prices,
+        )
 
-                pos = self.broker.positions.get(market)
-                sig = self.strategy.signal(market, histories[market], pos, regime)
+    if candles:
+        last_timestamp = candles[-1].timestamp
+    else:
+        last_timestamp = "unknown"
 
-                if pos:
-                    trade = self.broker.exit_by_signal(candle, sig)
-                    if trade:
-                        self._record_trade(trade)
-                    continue
+    force_closed_trades = broker.force_close_all(
+        timestamp=last_timestamp,
+        last_prices=last_prices,
+        reason_exit="force_close_end_of_backtest",
+    )
 
-                loss_decision = self.loss_filter.allow_market(market, candle.timestamp, self.state)
-                risk_decision = {"allow": False, "reason": "not_checked", "size_krw": 0}
+    for trade in force_closed_trades:
+        risk_manager.record_trade_result(trade.pnl_krw)
 
-                if sig.action == "ENTER_LONG" and loss_decision["allow"]:
-                    risk_decision = self.risk.approve_entry(
-                        market=market,
-                        signal=sig,
-                        equity=self.broker.equity(last_prices),
-                        cash=self.broker.cash,
-                        open_positions=len(self.broker.positions),
-                        state=self.state,
-                    )
-                    if risk_decision["allow"]:
-                        self.broker.enter_long(candle, risk_decision["size_krw"], sig)
+    trade_rows = [trade.to_dict() for trade in broker.trades]
+    decision_rows = broker.decision_logs
 
-                self.decisions_log.write({
+    write_jsonl(trades_path, trade_rows)
+    write_jsonl(decisions_path, decision_rows)
+
+    final_equity_krw = broker.equity_krw(last_prices)
+    total_pnl_krw = final_equity_krw - starting_cash_krw
+    total_pnl_pct = (total_pnl_krw / starting_cash_krw) * 100.0
+
+    state = {
+        "mode": "backtest",
+        "exchange": "upbit",
+        "market_type": "KRW",
+        "starting_cash_krw": starting_cash_krw,
+        "final_cash_krw": broker.cash_krw,
+        "final_equity_krw": final_equity_krw,
+        "total_pnl_krw": total_pnl_krw,
+        "total_pnl_pct": total_pnl_pct,
+        "open_positions": {
+            market: asdict(position)
+            for market, position in broker.positions.items()
+        },
+        "risk": risk_manager.to_dict(),
+        "last_prices": last_prices,
+        "trades_path": trades_path,
+        "decisions_path": decisions_path,
+    }
+
+    write_json(state_path, state)
+
+    return {
+        "ok": True,
+        "command": "backtest",
+        "exchange": "upbit",
+        "market_type": "KRW",
+        "csv_path": csv_path,
+        "markets": list(candles_by_market.keys()),
+        "total_candles": len(candles),
+        "total_trades": len(broker.trades),
+        "starting_cash_krw": round(starting_cash_krw, 2),
+        "final_equity_krw": round(final_equity_krw, 2),
+        "total_pnl_krw": round(total_pnl_krw, 2),
+        "total_pnl_pct": round(total_pnl_pct, 4),
+        "trades_path": trades_path,
+        "decisions_path": decisions_path,
+        "state_path": state_path,
+    }
+
+
+def _run_market_backtest(
+    market: str,
+    candles: List[Candle],
+    config: Dict[str, Any],
+    broker: PaperBroker,
+    risk_manager: RiskManager,
+    max_holding_bars: int,
+    last_prices: Dict[str, float],
+) -> None:
+    for index, candle in enumerate(candles):
+        last_prices[market] = candle.close
+
+        broker.update_position_price(
+            market=market,
+            price=candle.close,
+        )
+
+        exit_reason = broker.check_exit_reason(
+            market=market,
+            price=candle.close,
+            max_holding_bars=max_holding_bars,
+        )
+
+        if exit_reason is not None:
+            trade = broker.sell(
+                timestamp=candle.timestamp,
+                market=market,
+                price=candle.close,
+                reason_exit=exit_reason,
+            )
+
+            if trade is not None:
+                risk_manager.record_trade_result(trade.pnl_krw)
+
+        signal = generate_signal(
+            candles=candles,
+            index=index,
+            config=config,
+        )
+
+        if signal.action != "BUY":
+            broker.decision_logs.append(
+                {
                     "timestamp": candle.timestamp,
                     "market": market,
-                    "signal": sig.action,
-                    "score": sig.score,
-                    "reason": sig.reason,
-                    "regime": regime,
-                    "loss_filter": loss_decision,
-                    "risk": risk_decision,
-                    "cash": round(self.broker.cash, 2),
-                    "open_positions": len(self.broker.positions),
-                    "indicators": sig.indicators or {},
-                })
+                    "action": "NO_BUY",
+                    "reason": signal.reason,
+                    "score": signal.score,
+                    "close": candle.close,
+                    "signal": signal.to_dict(),
+                }
+            )
+            continue
 
-        for market, pos in list(self.broker.positions.items()):
-            candle = histories[market][-1]
-            trade = self.broker.exit_position(candle, "end_of_backtest", candle.close)
-            if trade:
-                self._record_trade(trade)
+        equity_krw = broker.equity_krw(last_prices)
 
-        result = {
-            "cash": round(self.broker.cash, 2),
-            "trades": len(self.broker.trades),
-            "equity": round(self.broker.equity(last_prices), 2),
+        risk_decision = risk_manager.check_entry(
+            market=market,
+            cash_krw=broker.cash_krw,
+            equity_krw=equity_krw,
+            open_position_count=broker.open_position_count(),
+            already_has_position=broker.has_position(market),
+        )
+
+        if not risk_decision.ok:
+            broker.decision_logs.append(
+                {
+                    "timestamp": candle.timestamp,
+                    "market": market,
+                    "action": "BUY_BLOCKED_BY_RISK",
+                    "reason": risk_decision.reason,
+                    "amount_krw": risk_decision.amount_krw,
+                    "score": signal.score,
+                    "signal": signal.to_dict(),
+                    "risk": risk_decision.to_dict(),
+                }
+            )
+            continue
+
+        broker.buy(
+            timestamp=candle.timestamp,
+            signal=signal,
+            amount_krw=risk_decision.amount_krw,
+        )
+
+
+def summarize_trades(trades: List[Trade]) -> Dict[str, Any]:
+    if not trades:
+        return {
+            "total_trades": 0,
+            "win_rate": 0.0,
+            "total_pnl_krw": 0.0,
+            "avg_pnl_pct": 0.0,
         }
-        return result
 
-    def _record_trade(self, trade) -> None:
-        self.trades_log.write(trade.to_dict())
-        self.state = StateStore.update_after_trade(self.state, trade.to_dict())
-        self.state_store.save(self.state)
+    wins = [trade for trade in trades if trade.pnl_krw > 0]
+    total_pnl_krw = sum(trade.pnl_krw for trade in trades)
+    avg_pnl_pct = sum(trade.pnl_pct for trade in trades) / len(trades)
 
-
-def run_backtest(config_path: str = "config/config.json", csv_path: str = "data/sample_ohlcv.csv") -> Dict[str, Any]:
-    cfg = load_config(config_path)
-
-    for file_path in [
-        Path(cfg["paths"]["logs_dir"]) / "trades.jsonl",
-        Path(cfg["paths"]["logs_dir"]) / "decisions.jsonl",
-    ]:
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text("", encoding="utf-8")
-
-    state_path = Path(cfg["paths"]["runtime_dir"]) / "state.json"
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    state_path.write_text("{}", encoding="utf-8")
-
-    engine = BacktestEngine(cfg)
-    result = engine.run(csv_path)
-
-    out = Path(cfg["paths"]["reports_dir"]) / "backtest_result.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    return result
+    return {
+        "total_trades": len(trades),
+        "win_rate": len(wins) / len(trades),
+        "total_pnl_krw": total_pnl_krw,
+        "avg_pnl_pct": avg_pnl_pct,
+    }

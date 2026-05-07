@@ -1,117 +1,255 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
+from dataclasses import asdict
+from typing import Dict, List, Optional
 
-from .models import Candle, Signal, Position, Trade
-from .market_rules import round_price_to_tick
+from .market_rules import (
+    apply_slippage,
+    assert_min_order,
+    calc_fee_krw,
+    calc_order_value_krw,
+    calc_qty_from_krw,
+)
+from .models import Position, Signal, Trade
 
 
 class PaperBroker:
-    def __init__(self, cfg: dict):
-        self.cfg = cfg
-        self.cash = float(cfg["portfolio"]["initial_cash_krw"])
-        self.fee_rate = float(cfg["portfolio"]["fee_rate"])
-        self.slippage_rate = float(cfg["portfolio"]["slippage_rate"])
+    def __init__(
+        self,
+        starting_cash_krw: float,
+        fee_rate: float,
+        slippage_pct: float,
+        min_order_krw: float,
+    ) -> None:
+        if starting_cash_krw <= 0:
+            raise ValueError("starting_cash_krw must be positive")
+
+        self.starting_cash_krw = starting_cash_krw
+        self.cash_krw = starting_cash_krw
+        self.fee_rate = fee_rate
+        self.slippage_pct = slippage_pct
+        self.min_order_krw = min_order_krw
+
         self.positions: Dict[str, Position] = {}
-        self.trades = []
+        self.trades: List[Trade] = []
+        self.decision_logs: List[dict] = []
 
-    def equity(self, last_prices: Dict[str, float]) -> float:
-        value = self.cash
-        for market, pos in self.positions.items():
-            value += pos.qty * last_prices.get(market, pos.entry_price)
-        return value
+    def has_position(self, market: str) -> bool:
+        return market in self.positions
 
-    def enter_long(self, candle: Candle, size_krw: float, signal: Signal) -> Optional[Position]:
-        if candle.market in self.positions:
+    def open_position_count(self) -> int:
+        return len(self.positions)
+
+    def can_buy(self, market: str, amount_krw: float) -> bool:
+        if self.has_position(market):
+            return False
+
+        if amount_krw < self.min_order_krw:
+            return False
+
+        return self.cash_krw >= amount_krw
+
+    def buy(
+        self,
+        timestamp: str,
+        signal: Signal,
+        amount_krw: float,
+    ) -> Optional[Position]:
+        market = signal.market
+
+        if not self.can_buy(market, amount_krw):
+            self.decision_logs.append(
+                {
+                    "timestamp": timestamp,
+                    "market": market,
+                    "action": "BUY_BLOCKED",
+                    "reason": "insufficient_cash_or_existing_position_or_min_order",
+                    "amount_krw": amount_krw,
+                    "cash_krw": self.cash_krw,
+                    "signal": signal.to_dict(),
+                }
+            )
             return None
 
-        buy_price = round_price_to_tick(candle.close * (1 + self.slippage_rate))
-        fee = size_krw * self.fee_rate
-        usable = size_krw - fee
-        qty = usable / buy_price
+        assert_min_order(amount_krw, self.min_order_krw)
 
-        if size_krw > self.cash:
-            return None
+        entry_price = apply_slippage(
+            price=signal.entry_price,
+            slippage_pct=self.slippage_pct,
+            side="buy",
+        )
 
-        self.cash -= size_krw
-        pos = Position(
-            market=candle.market,
-            entry_timestamp=candle.timestamp,
-            entry_price=buy_price,
+        entry_fee_krw = calc_fee_krw(amount_krw, self.fee_rate)
+        spend_krw = amount_krw - entry_fee_krw
+        qty = calc_qty_from_krw(spend_krw, entry_price)
+
+        stop_price = entry_price * (1.0 - (signal.stop_loss_pct / 100.0))
+        take_profit_price = entry_price * (1.0 + (signal.take_profit_pct / 100.0))
+
+        position = Position(
+            market=market,
+            entry_timestamp=timestamp,
+            entry_price=entry_price,
             qty=qty,
-            entry_fee_krw=fee,
+            entry_fee_krw=entry_fee_krw,
             reason_entry=signal.reason,
-            peak_price=buy_price,
-            trough_price=buy_price,
-            stop_price=buy_price * (1 - signal.stop_loss_pct),
-            take_profit_price=buy_price * (1 + signal.take_profit_pct),
+            bars_held=0,
+            peak_price=entry_price,
+            trough_price=entry_price,
+            max_profit_pct=0.0,
+            max_drawdown_pct=0.0,
+            stop_price=stop_price,
+            take_profit_price=take_profit_price,
             trailing_stop_pct=signal.trailing_stop_pct,
         )
-        self.positions[candle.market] = pos
-        return pos
 
-    def update_position(self, candle: Candle) -> Optional[Trade]:
-        pos = self.positions.get(candle.market)
-        if pos is None:
-            return None
+        self.cash_krw -= amount_krw
+        self.positions[market] = position
 
-        pos.bars_held += 1
-        pos.peak_price = max(pos.peak_price, candle.high)
-        pos.trough_price = min(pos.trough_price, candle.low)
-        pos.max_profit_pct = max(pos.max_profit_pct, (pos.peak_price / pos.entry_price) - 1)
-        pos.max_drawdown_pct = min(pos.max_drawdown_pct, (pos.trough_price / pos.entry_price) - 1)
-
-        trailing_stop = pos.peak_price * (1 - pos.trailing_stop_pct)
-        if candle.low <= pos.stop_price:
-            return self.exit_position(candle, "stop_loss", pos.stop_price)
-        if candle.high >= pos.take_profit_price:
-            return self.exit_position(candle, "take_profit", pos.take_profit_price)
-        if candle.low <= trailing_stop and pos.peak_price > pos.entry_price:
-            return self.exit_position(candle, "trailing_stop", trailing_stop)
-
-        max_bars = int(self.cfg["strategy"].get("max_holding_bars", 48))
-        if pos.bars_held >= max_bars:
-            return self.exit_position(candle, "time_exit", candle.close)
-
-        return None
-
-    def exit_by_signal(self, candle: Candle, signal: Signal) -> Optional[Trade]:
-        if signal.action == "EXIT_LONG":
-            return self.exit_position(candle, signal.reason, candle.close)
-        return None
-
-    def exit_position(self, candle: Candle, reason: str, raw_price: float) -> Optional[Trade]:
-        pos = self.positions.get(candle.market)
-        if pos is None:
-            return None
-
-        sell_price = round_price_to_tick(raw_price * (1 - self.slippage_rate))
-        gross = pos.qty * sell_price
-        exit_fee = gross * self.fee_rate
-        net = gross - exit_fee
-        self.cash += net
-
-        cost = pos.qty * pos.entry_price + pos.entry_fee_krw
-        pnl = net - cost
-        pnl_pct = pnl / cost if cost else 0.0
-
-        trade = Trade(
-            timestamp=candle.timestamp,
-            market=candle.market,
-            side="LONG",
-            entry_price=pos.entry_price,
-            exit_price=sell_price,
-            qty=pos.qty,
-            pnl_krw=round(pnl, 2),
-            pnl_pct=round(pnl_pct, 6),
-            fee_krw=round(pos.entry_fee_krw + exit_fee, 2),
-            reason_entry=pos.reason_entry,
-            reason_exit=reason,
-            max_profit_pct=round(pos.max_profit_pct, 6),
-            max_drawdown_pct=round(pos.max_drawdown_pct, 6),
-            holding_bars=pos.bars_held,
+        self.decision_logs.append(
+            {
+                "timestamp": timestamp,
+                "market": market,
+                "action": "VIRTUAL_BUY",
+                "amount_krw": amount_krw,
+                "entry_price": entry_price,
+                "qty": qty,
+                "fee_krw": entry_fee_krw,
+                "signal": signal.to_dict(),
+            }
         )
 
-        self.positions.pop(candle.market, None)
+        return position
+
+    def update_position_price(self, market: str, price: float) -> None:
+        position = self.positions.get(market)
+
+        if position is None:
+            return
+
+        position.bars_held += 1
+        position.peak_price = max(position.peak_price, price)
+        position.trough_price = min(position.trough_price, price)
+
+        profit_pct = ((position.peak_price - position.entry_price) / position.entry_price) * 100.0
+        drawdown_pct = ((position.trough_price - position.entry_price) / position.entry_price) * 100.0
+
+        position.max_profit_pct = max(position.max_profit_pct, profit_pct)
+        position.max_drawdown_pct = min(position.max_drawdown_pct, drawdown_pct)
+
+    def check_exit_reason(self, market: str, price: float, max_holding_bars: int) -> Optional[str]:
+        position = self.positions.get(market)
+
+        if position is None:
+            return None
+
+        if price <= position.stop_price:
+            return "stop_loss"
+
+        if price >= position.take_profit_price:
+            return "take_profit"
+
+        if position.trailing_stop_pct > 0 and position.peak_price > position.entry_price:
+            trailing_stop_price = position.peak_price * (1.0 - (position.trailing_stop_pct / 100.0))
+
+            if price <= trailing_stop_price:
+                return "trailing_stop"
+
+        if max_holding_bars > 0 and position.bars_held >= max_holding_bars:
+            return "max_holding_bars"
+
+        return None
+
+    def sell(
+        self,
+        timestamp: str,
+        market: str,
+        price: float,
+        reason_exit: str,
+    ) -> Optional[Trade]:
+        position = self.positions.get(market)
+
+        if position is None:
+            return None
+
+        exit_price = apply_slippage(
+            price=price,
+            slippage_pct=self.slippage_pct,
+            side="sell",
+        )
+
+        gross_exit_krw = calc_order_value_krw(exit_price, position.qty)
+        exit_fee_krw = calc_fee_krw(gross_exit_krw, self.fee_rate)
+        net_exit_krw = gross_exit_krw - exit_fee_krw
+
+        entry_value_krw = position.entry_price * position.qty
+        total_fee_krw = position.entry_fee_krw + exit_fee_krw
+        pnl_krw = net_exit_krw - entry_value_krw
+        pnl_pct = (pnl_krw / entry_value_krw) * 100.0 if entry_value_krw > 0 else 0.0
+
+        self.cash_krw += net_exit_krw
+
+        trade = Trade(
+            timestamp=timestamp,
+            market=market,
+            side="SELL",
+            entry_price=position.entry_price,
+            exit_price=exit_price,
+            qty=position.qty,
+            pnl_krw=pnl_krw,
+            pnl_pct=pnl_pct,
+            fee_krw=total_fee_krw,
+            reason_entry=position.reason_entry,
+            reason_exit=reason_exit,
+            max_profit_pct=position.max_profit_pct,
+            max_drawdown_pct=position.max_drawdown_pct,
+            holding_bars=position.bars_held,
+        )
+
         self.trades.append(trade)
+        del self.positions[market]
+
+        self.decision_logs.append(
+            {
+                "timestamp": timestamp,
+                "market": market,
+                "action": "VIRTUAL_SELL",
+                "reason_exit": reason_exit,
+                "entry_price": position.entry_price,
+                "exit_price": exit_price,
+                "qty": position.qty,
+                "pnl_krw": pnl_krw,
+                "pnl_pct": pnl_pct,
+                "fee_krw": total_fee_krw,
+                "position": asdict(position),
+            }
+        )
+
         return trade
+
+    def equity_krw(self, last_prices: Dict[str, float]) -> float:
+        equity = self.cash_krw
+
+        for market, position in self.positions.items():
+            last_price = last_prices.get(market, position.entry_price)
+            equity += position.qty * last_price
+
+        return equity
+
+    def force_close_all(
+        self,
+        timestamp: str,
+        last_prices: Dict[str, float],
+        reason_exit: str = "force_close_end_of_backtest",
+    ) -> List[Trade]:
+        closed_trades: List[Trade] = []
+
+        for market in list(self.positions.keys()):
+            position = self.positions[market]
+            price = last_prices.get(market, position.entry_price)
+            trade = self.sell(timestamp, market, price, reason_exit)
+
+            if trade is not None:
+                closed_trades.append(trade)
+
+        return closed_trades

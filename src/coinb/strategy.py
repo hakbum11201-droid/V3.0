@@ -1,96 +1,148 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from .models import Candle, Signal, Position
-from .indicators import ema, rsi, atr, volume_ratio, closes
+from .indicators import atr, ema, rolling_high, rsi, volume_ratio
+from .models import Candle, Signal
 
 
-class MultiFactorStrategy:
-    def __init__(self, cfg: dict):
-        self.cfg = cfg
-        self.s = cfg["strategy"]
+def generate_signal(
+    candles: List[Candle],
+    index: int,
+    config: Dict[str, Any],
+) -> Signal:
+    if not candles:
+        raise ValueError("candles is empty")
 
-    def signal(
-        self,
-        market: str,
-        history: List[Candle],
-        position: Optional[Position],
-        regime: str,
-    ) -> Signal:
-        min_len = max(
-            int(self.s["slow_ema"]) + 3,
-            int(self.s["breakout_lookback"]) + 2,
-            int(self.s["rsi_period"]) + 2,
-            int(self.s["atr_period"]) + 2,
+    if index < 0 or index >= len(candles):
+        raise IndexError(f"index out of range: {index}")
+
+    candle = candles[index]
+    strategy_config = config.get("strategy", {})
+
+    ema_fast_period = int(strategy_config.get("ema_fast_period", 9))
+    ema_slow_period = int(strategy_config.get("ema_slow_period", 21))
+    rsi_period = int(strategy_config.get("rsi_period", 14))
+    atr_period = int(strategy_config.get("atr_period", 14))
+    volume_period = int(strategy_config.get("volume_period", 20))
+    breakout_period = int(strategy_config.get("breakout_period", 20))
+
+    rsi_max = float(strategy_config.get("rsi_max", 72.0))
+    atr_min_pct = float(strategy_config.get("atr_min_pct", 0.15))
+    volume_ratio_min = float(strategy_config.get("volume_ratio_min", 1.2))
+    min_score = float(strategy_config.get("min_score", 3.0))
+
+    stop_loss_pct = float(strategy_config.get("stop_loss_pct", 0.8))
+    take_profit_pct = float(strategy_config.get("take_profit_pct", 1.4))
+    trailing_stop_pct = float(strategy_config.get("trailing_stop_pct", 0.7))
+
+    closes = [c.close for c in candles]
+
+    ema_fast_values = ema(closes, ema_fast_period)
+    ema_slow_values = ema(closes, ema_slow_period)
+    rsi_values = rsi(closes, rsi_period)
+    atr_values = atr(candles, atr_period)
+    volume_ratio_values = volume_ratio(candles, volume_period)
+    breakout_high_values = rolling_high(closes, breakout_period)
+
+    ema_fast = ema_fast_values[index]
+    ema_slow = ema_slow_values[index]
+    rsi_value = rsi_values[index]
+    atr_value = atr_values[index]
+    volume_ratio_value = volume_ratio_values[index]
+    breakout_high = breakout_high_values[index]
+
+    indicators = {
+        "ema_fast": ema_fast,
+        "ema_slow": ema_slow,
+        "rsi": rsi_value,
+        "atr": atr_value,
+        "volume_ratio": volume_ratio_value,
+        "breakout_high": breakout_high,
+    }
+
+    if _has_missing_values(
+        [
+            ema_fast,
+            ema_slow,
+            rsi_value,
+            atr_value,
+            volume_ratio_value,
+            breakout_high,
+        ]
+    ):
+        return Signal(
+            market=candle.market,
+            action="HOLD",
+            score=0.0,
+            reason="insufficient_indicator_data",
+            entry_price=candle.close,
+            indicators=indicators,
         )
-        if len(history) < min_len:
-            return Signal(market, "HOLD", 0, "warmup")
 
-        values = closes(history)
-        candle = history[-1]
-        fast = ema(values[-int(self.s["fast_ema"]):], int(self.s["fast_ema"]))
-        slow = ema(values[-int(self.s["slow_ema"]):], int(self.s["slow_ema"]))
-        r = rsi(history, int(self.s["rsi_period"]))
-        a = atr(history, int(self.s["atr_period"]))
-        atr_pct = a / candle.close if candle.close else 0
-        vr = volume_ratio(history, int(self.s["volume_lookback"]))
-        lookback = int(self.s["breakout_lookback"])
-        prev_high = max(c.high for c in history[-lookback-1:-1])
+    score = 0.0
+    reasons: List[str] = []
 
-        indicators = {
-            "fast_ema": fast,
-            "slow_ema": slow,
-            "rsi": r,
-            "atr_pct": atr_pct,
-            "volume_ratio": vr,
-            "regime": regime,
-            "prev_high": prev_high,
-        }
+    if ema_fast is not None and ema_slow is not None and ema_fast > ema_slow:
+        score += 1.0
+        reasons.append("ema_uptrend")
+    else:
+        reasons.append("ema_not_uptrend")
 
-        if position is not None:
-            if r >= float(self.s["rsi_exit"]):
-                return Signal(market, "EXIT_LONG", 4, "rsi_overheat_exit", candle.close, indicators=indicators)
-            if fast < slow:
-                return Signal(market, "EXIT_LONG", 3, "ema_bear_exit", candle.close, indicators=indicators)
-            return Signal(market, "HOLD", 0, "position_hold", candle.close, indicators=indicators)
+    if rsi_value is not None and rsi_value < rsi_max:
+        score += 1.0
+        reasons.append("rsi_not_overheated")
+    else:
+        reasons.append("rsi_overheated")
 
-        if self.cfg["regime"].get("bear_block", True) and regime == "BEAR":
-            return Signal(market, "HOLD", 0, "btc_bear_block", candle.close, indicators=indicators)
+    if atr_value is not None and candle.close > 0:
+        atr_pct = (atr_value / candle.close) * 100.0
+        indicators["atr_pct"] = atr_pct
 
-        score = 0
-        reasons = []
+        if atr_pct >= atr_min_pct:
+            score += 1.0
+            reasons.append("atr_enough")
+        else:
+            reasons.append("atr_too_low")
+    else:
+        reasons.append("atr_missing")
 
-        if fast > slow:
-            score += 1
-            reasons.append("ema_up")
-        if candle.close > prev_high:
-            score += 1
-            reasons.append("breakout")
-        if vr >= float(self.s["volume_ratio_min"]):
-            score += 1
-            reasons.append("volume_participation")
-        if r <= float(self.s["rsi_max_entry"]):
-            score += 1
-            reasons.append("rsi_ok")
-        if atr_pct >= float(self.s["atr_min_pct"]):
-            score += 1
-            reasons.append("atr_ok")
-        if regime in ("BULL", "SIDE"):
-            score += 1
-            reasons.append(f"regime_{regime.lower()}")
+    if volume_ratio_value is not None and volume_ratio_value >= volume_ratio_min:
+        score += 1.0
+        reasons.append("volume_participation")
+    else:
+        reasons.append("volume_weak")
 
-        if score >= int(self.s["score_min"]):
-            return Signal(
-                market=market,
-                action="ENTER_LONG",
-                score=score,
-                reason="+".join(reasons),
-                entry_price=candle.close,
-                stop_loss_pct=float(self.s["stop_loss_pct"]),
-                take_profit_pct=float(self.s["take_profit_pct"]),
-                trailing_stop_pct=float(self.s["trailing_stop_pct"]),
-                indicators=indicators,
-            )
+    if breakout_high is not None and candle.close > breakout_high:
+        score += 1.0
+        reasons.append("breakout")
+    else:
+        reasons.append("no_breakout")
 
-        return Signal(market, "HOLD", score, "score_too_low:" + "+".join(reasons), candle.close, indicators=indicators)
+    action = "BUY" if score >= min_score else "HOLD"
+
+    return Signal(
+        market=candle.market,
+        action=action,
+        score=score,
+        reason=",".join(reasons),
+        entry_price=candle.close,
+        stop_loss_pct=stop_loss_pct,
+        take_profit_pct=take_profit_pct,
+        trailing_stop_pct=trailing_stop_pct,
+        indicators=indicators,
+    )
+
+
+def generate_signals(
+    candles: List[Candle],
+    config: Dict[str, Any],
+) -> List[Signal]:
+    return [
+        generate_signal(candles=candles, index=index, config=config)
+        for index in range(len(candles))
+    ]
+
+
+def _has_missing_values(values: List[Optional[float]]) -> bool:
+    return any(value is None for value in values)

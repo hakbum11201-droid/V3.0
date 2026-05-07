@@ -1,44 +1,87 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from typing import Dict, Any
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Dict, List
+
+from .jsonl import read_json, write_json
 
 
-DEFAULT_STATE = {
-    "total_pnl_krw": 0.0,
-    "consecutive_losses": 0,
-    "trade_count": 0,
-    "blocked_markets": {},
-}
+@dataclass
+class RuntimeState:
+    mode: str = "paper"
+    exchange: str = "upbit"
+    market_type: str = "KRW"
+    status: str = "initialized"
+    last_updated: str = ""
+    open_positions: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    last_prices: Dict[str, float] = field(default_factory=dict)
+    risk: Dict[str, Any] = field(default_factory=dict)
+    stats: Dict[str, Any] = field(default_factory=dict)
+    messages: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = asdict(self)
+
+        if not data["last_updated"]:
+            data["last_updated"] = now_iso()
+
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "RuntimeState":
+        return cls(
+            mode=str(data.get("mode", "paper")),
+            exchange=str(data.get("exchange", "upbit")),
+            market_type=str(data.get("market_type", "KRW")),
+            status=str(data.get("status", "initialized")),
+            last_updated=str(data.get("last_updated", "")),
+            open_positions=dict(data.get("open_positions", {})),
+            last_prices=dict(data.get("last_prices", {})),
+            risk=dict(data.get("risk", {})),
+            stats=dict(data.get("stats", {})),
+            messages=list(data.get("messages", [])),
+        )
 
 
-class StateStore:
-    def __init__(self, path: Path):
-        self.path = path
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
-    def load(self) -> Dict[str, Any]:
-        if not self.path.exists():
-            return dict(DEFAULT_STATE)
-        try:
-            loaded = json.loads(self.path.read_text(encoding="utf-8"))
-            state = dict(DEFAULT_STATE)
-            state.update(loaded)
-            return state
-        except json.JSONDecodeError:
-            return dict(DEFAULT_STATE)
 
-    def save(self, state: Dict[str, Any]) -> None:
-        self.path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+def load_state(path: str = "runtime/state.json") -> RuntimeState:
+    data = read_json(path, default={})
 
-    @staticmethod
-    def update_after_trade(state: Dict[str, Any], trade: Dict[str, Any]) -> Dict[str, Any]:
-        pnl = float(trade.get("pnl_krw", 0))
-        state["total_pnl_krw"] = float(state.get("total_pnl_krw", 0)) + pnl
-        state["trade_count"] = int(state.get("trade_count", 0)) + 1
-        if pnl < 0:
-            state["consecutive_losses"] = int(state.get("consecutive_losses", 0)) + 1
-        else:
-            state["consecutive_losses"] = 0
-        return state
+    if not data:
+        return RuntimeState(last_updated=now_iso())
+
+    return RuntimeState.from_dict(data)
+
+
+def save_state(
+    state: RuntimeState,
+    path: str = "runtime/state.json",
+) -> None:
+    state.last_updated = now_iso()
+    write_json(path, state.to_dict())
+
+
+def update_state(
+    path: str,
+    updates: Dict[str, Any],
+) -> RuntimeState:
+    state = load_state(path)
+    data = state.to_dict()
+    data.update(updates)
+
+    updated_state = RuntimeState.from_dict(data)
+    save_state(updated_state, path)
+
+    return updated_state
+
+
+def make_error_state(message: str) -> RuntimeState:
+    return RuntimeState(
+        status="error",
+        last_updated=now_iso(),
+        messages=[message],
+    )

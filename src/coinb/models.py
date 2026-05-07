@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from typing import Optional
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, Optional
 
 
 @dataclass
@@ -25,9 +25,9 @@ class Signal:
     stop_loss_pct: float = 0.0
     take_profit_pct: float = 0.0
     trailing_stop_pct: float = 0.0
-    indicators: Optional[dict] = None
+    indicators: Optional[Dict[str, Any]] = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
@@ -66,5 +66,5 @@ class Trade:
     max_drawdown_pct: float
     holding_bars: int
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

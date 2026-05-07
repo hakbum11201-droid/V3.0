@@ -1,8 +1,10 @@
 {
   "app": {
     "name": "coinB PRO",
-    "version": "3.0.1-fixed",
-    "default_mode": "paper"
+    "version": "3.0.1",
+    "default_mode": "paper",
+    "exchange": "upbit",
+    "market_type": "KRW"
   },
   "markets": [
     "KRW-BTC",
@@ -12,43 +14,68 @@
   "paths": {
     "logs_dir": "logs",
     "runtime_dir": "runtime",
-    "reports_dir": "reports"
+    "reports_dir": "reports",
+    "trades_log": "logs/trades.jsonl",
+    "decisions_log": "logs/decisions.jsonl",
+    "state": "runtime/state.json",
+    "performance_report": "reports/performance_summary.json",
+    "tuner_report": "reports/tuner_summary.json",
+    "candidate_config": "reports/config_candidate.json"
   },
   "portfolio": {
-    "initial_cash_krw": 1000000,
-    "position_size_pct": 0.2,
-    "max_positions": 2,
-    "min_order_krw": 5000,
-    "fee_rate": 0.0005,
-    "slippage_rate": 0.0007
+    "starting_cash_krw": 1000000,
+    "max_position_krw": 100000,
+    "position_size_pct": 10.0,
+    "max_open_positions": 2
   },
   "risk": {
-    "daily_loss_limit_pct": 0.03,
-    "total_loss_limit_pct": 0.08,
-    "max_consecutive_losses": 3,
-    "cooldown_minutes_after_loss": 10
+    "min_order_krw": 5000,
+    "fee_rate": 0.0005,
+    "slippage_pct": 0.05,
+    "daily_loss_limit_pct": 3.0,
+    "total_loss_limit_pct": 8.0,
+    "max_consecutive_losses": 3
   },
   "strategy": {
-    "fast_ema": 8,
-    "slow_ema": 21,
-    "breakout_lookback": 12,
-    "volume_lookback": 12,
-    "volume_ratio_min": 1.05,
+    "ema_fast_period": 8,
+    "ema_slow_period": 21,
     "rsi_period": 14,
-    "rsi_max_entry": 74,
-    "rsi_exit": 82,
+    "rsi_max": 73.0,
     "atr_period": 14,
-    "atr_min_pct": 0.001,
-    "take_profit_pct": 0.035,
-    "stop_loss_pct": 0.016,
-    "trailing_stop_pct": 0.018,
-    "max_holding_bars": 48,
-    "score_min": 4
+    "atr_min_pct": 0.1,
+    "volume_period": 12,
+    "volume_ratio_min": 1.35,
+    "breakout_period": 12,
+    "min_score": 4.0,
+    "take_profit_pct": 1.4,
+    "stop_loss_pct": 0.8,
+    "trailing_stop_pct": 0.7,
+    "max_holding_bars": 48
   },
   "regime": {
+    "enabled": true,
     "btc_market": "KRW-BTC",
-    "ema_period": 21,
-    "bear_block": true
+    "btc_ema_fast_period": 12,
+    "btc_ema_slow_period": 36,
+    "btc_change_lookback": 12,
+    "btc_min_change_pct": -2.0
+  },
+  "loss_filter": {
+    "enabled": true,
+    "lookback_trades": 20,
+    "min_recent_trades": 5,
+    "max_consecutive_losses": 3,
+    "min_recent_win_rate": 0.25,
+    "min_expectancy_pct": -0.2
+  },
+  "microstructure": {
+    "enabled": false,
+    "buy_sell_imbalance_min": 2.2,
+    "sweep_score_min": 70,
+    "absorption_score_min": 65,
+    "continuation_score_min": 65,
+    "max_spread_pct": 0.12,
+    "min_trade_value_3s": 30000000
   },
   "live": {
     "enabled": false,

@@ -1,6 +1,33 @@
 {
-  "total_pnl_krw": -753.3100000000001,
-  "consecutive_losses": 4,
-  "trade_count": 4,
-  "blocked_markets": {}
+  "mode": "backtest",
+  "exchange": "upbit",
+  "market_type": "KRW",
+  "starting_cash_krw": 1000000.0,
+  "final_cash_krw": 1021494.4616722362,
+  "final_equity_krw": 1021494.4616722362,
+  "total_pnl_krw": 21494.46167223621,
+  "total_pnl_pct": 2.149446167223621,
+  "open_positions": {},
+  "risk": {
+    "starting_cash_krw": 1000000.0,
+    "max_position_krw": 100000.0,
+    "position_size_pct": 10.0,
+    "max_open_positions": 2,
+    "min_order_krw": 5000.0,
+    "daily_loss_limit_pct": 3.0,
+    "total_loss_limit_pct": 8.0,
+    "max_consecutive_losses": 3,
+    "realized_pnl_krw": 22144.461672236226,
+    "consecutive_losses": 0,
+    "trade_count": 13,
+    "loss_trade_count": 0,
+    "win_trade_count": 13,
+    "is_stopped": false,
+    "stop_reason": ""
+  },
+  "last_prices": {
+    "KRW-XRP": 1150.0
+  },
+  "trades_path": "logs/trades.jsonl",
+  "decisions_path": "logs/decisions.jsonl"
 }

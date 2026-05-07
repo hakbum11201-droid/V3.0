@@ -1,88 +1,139 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from typing import Dict, Any, List
+from collections import defaultdict
+from typing import Any, Dict, List
 
-from .jsonl import read_jsonl
 from .config_loader import load_config
-
-
-def max_drawdown_from_equity(equity_curve: List[float]) -> float:
-    peak = None
-    max_dd = 0.0
-
-    for equity in equity_curve:
-        if peak is None or equity > peak:
-            peak = equity
-        if peak and peak > 0:
-            max_dd = min(max_dd, (equity / peak) - 1)
-
-    return max_dd
-
-
-def analyze_trades(trades: List[Dict[str, Any]], initial_cash: float = 1_000_000) -> Dict[str, Any]:
-    total = len(trades)
-    wins = [t for t in trades if float(t.get("pnl_krw", 0)) > 0]
-    losses = [t for t in trades if float(t.get("pnl_krw", 0)) < 0]
-
-    pnl = [float(t.get("pnl_krw", 0)) for t in trades]
-    pnl_pct = [float(t.get("pnl_pct", 0)) for t in trades]
-    gross_win = sum(x for x in pnl if x > 0)
-    gross_loss = abs(sum(x for x in pnl if x < 0))
-
-    equity = initial_cash
-    curve = []
-    consecutive_losses = 0
-    max_consecutive_losses = 0
-    by_market: Dict[str, Dict[str, float]] = {}
-
-    for trade in trades:
-        p = float(trade.get("pnl_krw", 0))
-        equity += p
-        curve.append(equity)
-
-        if p < 0:
-            consecutive_losses += 1
-        else:
-            consecutive_losses = 0
-        max_consecutive_losses = max(max_consecutive_losses, consecutive_losses)
-
-        market = str(trade.get("market", "UNKNOWN"))
-        st = by_market.setdefault(market, {"trades": 0, "pnl": 0.0, "wins": 0})
-        st["trades"] += 1
-        st["pnl"] += p
-        if p > 0:
-            st["wins"] += 1
-
-    best_market = max(by_market.items(), key=lambda kv: kv[1]["pnl"])[0] if by_market else None
-    worst_market = min(by_market.items(), key=lambda kv: kv[1]["pnl"])[0] if by_market else None
-
-    return {
-        "total_trades": total,
-        "win_rate": len(wins) / total if total else 0.0,
-        "avg_win_pct": sum(float(t.get("pnl_pct", 0)) for t in wins) / len(wins) if wins else 0.0,
-        "avg_loss_pct": sum(float(t.get("pnl_pct", 0)) for t in losses) / len(losses) if losses else 0.0,
-        "profit_factor": gross_win / gross_loss if gross_loss else (999.0 if gross_win else 0.0),
-        "expectancy_krw": sum(pnl) / total if total else 0.0,
-        "expectancy_pct": sum(pnl_pct) / total if total else 0.0,
-        "max_drawdown": max_drawdown_from_equity(curve),
-        "total_pnl_krw": sum(pnl),
-        "roi_pct": (sum(pnl) / initial_cash) if initial_cash else 0.0,
-        "best_market": best_market,
-        "worst_market": worst_market,
-        "consecutive_losses": max_consecutive_losses,
-        "by_market": by_market,
-    }
+from .jsonl import read_jsonl, write_json
 
 
 def run_report(config_path: str = "config/config.json") -> Dict[str, Any]:
-    cfg = load_config(config_path)
-    trades = list(read_jsonl(Path(cfg["paths"]["logs_dir"]) / "trades.jsonl"))
-    report = analyze_trades(trades, cfg["portfolio"]["initial_cash_krw"])
+    config = load_config(config_path)
+    paths_config = config.get("paths", {})
 
-    out = Path(cfg["paths"]["reports_dir"]) / "performance_summary.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    trades_path = paths_config.get("trades_log", "logs/trades.jsonl")
+    report_path = paths_config.get("performance_report", "reports/performance_summary.json")
+
+    trades = read_jsonl(trades_path)
+    summary = build_performance_summary(trades)
+
+    report = {
+        "ok": True,
+        "command": "report",
+        "exchange": "upbit",
+        "market_type": "KRW",
+        "source": trades_path,
+        "report_path": report_path,
+        "summary": summary,
+    }
+
+    write_json(report_path, report)
 
     return report
+
+
+def build_performance_summary(trades: List[Dict[str, Any]]) -> Dict[str, Any]:
+    if not trades:
+        return {
+            "total_trades": 0,
+            "win_rate": 0.0,
+            "avg_win_pct": 0.0,
+            "avg_loss_pct": 0.0,
+            "profit_factor": 0.0,
+            "expectancy_pct": 0.0,
+            "max_drawdown_krw": 0.0,
+            "total_pnl_krw": 0.0,
+            "best_market": "",
+            "worst_market": "",
+            "consecutive_losses": 0,
+        }
+
+    pnl_values = [_to_float(trade.get("pnl_krw", 0.0)) for trade in trades]
+    pnl_pct_values = [_to_float(trade.get("pnl_pct", 0.0)) for trade in trades]
+
+    wins = [value for value in pnl_pct_values if value > 0]
+    losses = [value for value in pnl_pct_values if value < 0]
+
+    gross_profit = sum(value for value in pnl_values if value > 0)
+    gross_loss = abs(sum(value for value in pnl_values if value < 0))
+
+    total_trades = len(trades)
+    win_rate = len(wins) / total_trades if total_trades > 0 else 0.0
+
+    avg_win_pct = sum(wins) / len(wins) if wins else 0.0
+    avg_loss_pct = sum(losses) / len(losses) if losses else 0.0
+
+    profit_factor = gross_profit / gross_loss if gross_loss > 0 else gross_profit
+    expectancy_pct = sum(pnl_pct_values) / total_trades if total_trades > 0 else 0.0
+
+    total_pnl_krw = sum(pnl_values)
+    max_drawdown_krw = calc_max_drawdown_krw(pnl_values)
+
+    market_pnl = calc_market_pnl(trades)
+    best_market = max(market_pnl, key=market_pnl.get) if market_pnl else ""
+    worst_market = min(market_pnl, key=market_pnl.get) if market_pnl else ""
+
+    return {
+        "total_trades": total_trades,
+        "win_rate": round(win_rate, 4),
+        "avg_win_pct": round(avg_win_pct, 4),
+        "avg_loss_pct": round(avg_loss_pct, 4),
+        "profit_factor": round(profit_factor, 4),
+        "expectancy_pct": round(expectancy_pct, 4),
+        "max_drawdown_krw": round(max_drawdown_krw, 2),
+        "total_pnl_krw": round(total_pnl_krw, 2),
+        "best_market": best_market,
+        "worst_market": worst_market,
+        "market_pnl_krw": {
+            market: round(value, 2)
+            for market, value in market_pnl.items()
+        },
+        "consecutive_losses": calc_max_consecutive_losses(trades),
+    }
+
+
+def calc_market_pnl(trades: List[Dict[str, Any]]) -> Dict[str, float]:
+    result: Dict[str, float] = defaultdict(float)
+
+    for trade in trades:
+        market = str(trade.get("market", "UNKNOWN"))
+        result[market] += _to_float(trade.get("pnl_krw", 0.0))
+
+    return dict(result)
+
+
+def calc_max_consecutive_losses(trades: List[Dict[str, Any]]) -> int:
+    max_losses = 0
+    current_losses = 0
+
+    for trade in trades:
+        pnl_krw = _to_float(trade.get("pnl_krw", 0.0))
+
+        if pnl_krw < 0:
+            current_losses += 1
+            max_losses = max(max_losses, current_losses)
+        else:
+            current_losses = 0
+
+    return max_losses
+
+
+def calc_max_drawdown_krw(pnl_values: List[float]) -> float:
+    equity = 0.0
+    peak = 0.0
+    max_drawdown = 0.0
+
+    for pnl in pnl_values:
+        equity += pnl
+        peak = max(peak, equity)
+        drawdown = peak - equity
+        max_drawdown = max(max_drawdown, drawdown)
+
+    return max_drawdown
+
+
+def _to_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
