@@ -1,45 +1,66 @@
 from __future__ import annotations
-import itertools, json, copy
+
+import copy
+import json
 from pathlib import Path
 from typing import Dict, Any, List
+
 from .config_loader import load_config
-from .backtest import BacktestEngine
-from .report import analyze_trades
-from .jsonl import read_jsonl
+from .backtest import run_backtest
+from .report import run_report
 
-class ParameterTuner:
-    def __init__(self, cfg: Dict[str, Any], csv_path: str = "data/sample_ohlcv.csv"):
-        self.base=cfg
-        self.csv_path=csv_path
-
-    def run(self) -> Dict[str, Any]:
-        grid=self.base.get("tuner", {})
-        keys=list(grid.keys())
-        combos=list(itertools.product(*(grid[k] for k in keys)))
-        results=[]
-        for idx, combo in enumerate(combos, start=1):
-            cfg=copy.deepcopy(self.base)
-            cfg["paths"]={**cfg["paths"], "logs_dir":f"logs/tuner/{idx}", "runtime_dir":f"runtime/tuner/{idx}"}
-            for k,v in zip(keys, combo):
-                cfg["strategy"][k]=v
-            # reset logs
-            Path(cfg["paths"]["logs_dir"]).mkdir(parents=True, exist_ok=True)
-            (Path(cfg["paths"]["logs_dir"])/"trades.jsonl").write_text("", encoding="utf-8")
-            (Path(cfg["paths"]["logs_dir"])/"decisions.jsonl").write_text("", encoding="utf-8")
-            engine=BacktestEngine(cfg)
-            engine.run(self.csv_path)
-            trades=list(read_jsonl(Path(cfg["paths"]["logs_dir"])/"trades.jsonl"))
-            rep=analyze_trades(trades, cfg["portfolio"]["initial_cash_krw"])
-            penalty=abs(min(rep["max_drawdown"],0))*100000
-            score=rep["expectancy_krw"]*rep["total_trades"] + rep["profit_factor"]*100 - penalty
-            results.append({"params":dict(zip(keys, combo)), "score":score, "report":rep})
-        results.sort(key=lambda x: x["score"], reverse=True)
-        return {"best":results[0] if results else None, "top5":results[:5], "tested":len(results)}
 
 def run_tuner(config_path: str = "config/config.json", csv_path: str = "data/sample_ohlcv.csv") -> Dict[str, Any]:
-    cfg=load_config(config_path)
-    summary=ParameterTuner(cfg,csv_path).run()
-    out=Path(cfg["paths"]["reports_dir"])/"tuner_summary.json"
+    base_cfg = load_config(config_path)
+    candidates: List[Dict[str, Any]] = []
+
+    grids = [
+        {"score_min": 3, "rsi_max_entry": 78, "take_profit_pct": 0.030, "stop_loss_pct": 0.018},
+        {"score_min": 4, "rsi_max_entry": 74, "take_profit_pct": 0.035, "stop_loss_pct": 0.016},
+        {"score_min": 5, "rsi_max_entry": 70, "take_profit_pct": 0.040, "stop_loss_pct": 0.015},
+    ]
+
+    temp_config = Path(base_cfg["paths"]["runtime_dir"]) / "_tuner_config.json"
+    temp_config.parent.mkdir(parents=True, exist_ok=True)
+
+    for i, params in enumerate(grids, start=1):
+        cfg = copy.deepcopy(base_cfg)
+        cfg["strategy"].update(params)
+        temp_config.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        backtest_result = run_backtest(str(temp_config), csv_path)
+        report = run_report(str(temp_config))
+
+        score = (
+            report.get("expectancy_krw", 0)
+            + report.get("total_pnl_krw", 0) * 0.1
+            - abs(report.get("max_drawdown", 0)) * 10000
+            - report.get("consecutive_losses", 0) * 100
+        )
+
+        candidates.append({
+            "rank_input": i,
+            "params": params,
+            "score": score,
+            "backtest": backtest_result,
+            "report": report,
+        })
+
+    candidates.sort(key=lambda x: x["score"], reverse=True)
+    summary = {
+        "best": candidates[0] if candidates else None,
+        "candidates": candidates,
+        "note": "자동으로 코드 수정하지 않음. candidate config는 사람이 확인 후 적용.",
+    }
+
+    out = Path(base_cfg["paths"]["reports_dir"]) / "tuner_summary.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    if candidates:
+        candidate_cfg = copy.deepcopy(base_cfg)
+        candidate_cfg["strategy"].update(candidates[0]["params"])
+        candidate_out = Path(base_cfg["paths"]["reports_dir"]) / "config_candidate.json"
+        candidate_out.write_text(json.dumps(candidate_cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+
     return summary

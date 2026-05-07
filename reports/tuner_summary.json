@@ -1,0 +1,188 @@
+{
+  "best": {
+    "rank_input": 2,
+    "params": {
+      "score_min": 4,
+      "rsi_max_entry": 74,
+      "take_profit_pct": 0.035,
+      "stop_loss_pct": 0.016
+    },
+    "score": -390.51753598637174,
+    "backtest": {
+      "cash": 999606.79,
+      "trades": 8,
+      "equity": 999606.79
+    },
+    "report": {
+      "total_trades": 8,
+      "win_rate": 0.375,
+      "avg_win_pct": 9.333333333333333e-05,
+      "avg_loss_pct": -0.0004494,
+      "profit_factor": 0.1246632977894526,
+      "expectancy_krw": -49.15125,
+      "expectancy_pct": -0.000245875,
+      "max_drawdown": -0.00020452859863717698,
+      "total_pnl_krw": -393.21,
+      "roi_pct": -0.00039320999999999996,
+      "best_market": "KRW-SOL",
+      "worst_market": "KRW-XRP",
+      "consecutive_losses": 3,
+      "by_market": {
+        "KRW-BTC": {
+          "trades": 3,
+          "pnl": -187.84,
+          "wins": 1
+        },
+        "KRW-XRP": {
+          "trades": 3,
+          "pnl": -202.36,
+          "wins": 1
+        },
+        "KRW-SOL": {
+          "trades": 2,
+          "pnl": -3.009999999999998,
+          "wins": 1
+        }
+      }
+    }
+  },
+  "candidates": [
+    {
+      "rank_input": 2,
+      "params": {
+        "score_min": 4,
+        "rsi_max_entry": 74,
+        "take_profit_pct": 0.035,
+        "stop_loss_pct": 0.016
+      },
+      "score": -390.51753598637174,
+      "backtest": {
+        "cash": 999606.79,
+        "trades": 8,
+        "equity": 999606.79
+      },
+      "report": {
+        "total_trades": 8,
+        "win_rate": 0.375,
+        "avg_win_pct": 9.333333333333333e-05,
+        "avg_loss_pct": -0.0004494,
+        "profit_factor": 0.1246632977894526,
+        "expectancy_krw": -49.15125,
+        "expectancy_pct": -0.000245875,
+        "max_drawdown": -0.00020452859863717698,
+        "total_pnl_krw": -393.21,
+        "roi_pct": -0.00039320999999999996,
+        "best_market": "KRW-SOL",
+        "worst_market": "KRW-XRP",
+        "consecutive_losses": 3,
+        "by_market": {
+          "KRW-BTC": {
+            "trades": 3,
+            "pnl": -187.84,
+            "wins": 1
+          },
+          "KRW-XRP": {
+            "trades": 3,
+            "pnl": -202.36,
+            "wins": 1
+          },
+          "KRW-SOL": {
+            "trades": 2,
+            "pnl": -3.009999999999998,
+            "wins": 1
+          }
+        }
+      }
+    },
+    {
+      "rank_input": 1,
+      "params": {
+        "score_min": 3,
+        "rsi_max_entry": 78,
+        "take_profit_pct": 0.03,
+        "stop_loss_pct": 0.018
+      },
+      "score": -664.0524648513751,
+      "backtest": {
+        "cash": 999261.82,
+        "trades": 4,
+        "equity": 999261.82
+      },
+      "report": {
+        "total_trades": 4,
+        "win_rate": 0.0,
+        "avg_win_pct": 0.0,
+        "avg_loss_pct": -0.000923,
+        "profit_factor": 0.0,
+        "expectancy_krw": -184.5475,
+        "expectancy_pct": -0.000923,
+        "max_drawdown": -0.000568596485137518,
+        "total_pnl_krw": -738.19,
+        "roi_pct": -0.00073819,
+        "best_market": "KRW-XRP",
+        "worst_market": "KRW-BTC",
+        "consecutive_losses": 4,
+        "by_market": {
+          "KRW-BTC": {
+            "trades": 2,
+            "pnl": -362.03999999999996,
+            "wins": 0
+          },
+          "KRW-XRP": {
+            "trades": 1,
+            "pnl": -176.27,
+            "wins": 0
+          },
+          "KRW-SOL": {
+            "trades": 1,
+            "pnl": -199.88,
+            "wins": 0
+          }
+        }
+      }
+    },
+    {
+      "rank_input": 3,
+      "params": {
+        "score_min": 5,
+        "rsi_max_entry": 70,
+        "take_profit_pct": 0.04,
+        "stop_loss_pct": 0.015
+      },
+      "score": -669.1932066645973,
+      "backtest": {
+        "cash": 999246.69,
+        "trades": 4,
+        "equity": 999246.69
+      },
+      "report": {
+        "total_trades": 4,
+        "win_rate": 0.0,
+        "avg_win_pct": 0.0,
+        "avg_loss_pct": -0.000942,
+        "profit_factor": 0.0,
+        "expectancy_krw": -188.3275,
+        "expectancy_pct": -0.000942,
+        "max_drawdown": -0.0005534706664597211,
+        "total_pnl_krw": -753.31,
+        "roi_pct": -0.00075331,
+        "best_market": "KRW-SOL",
+        "worst_market": "KRW-XRP",
+        "consecutive_losses": 4,
+        "by_market": {
+          "KRW-XRP": {
+            "trades": 2,
+            "pnl": -399.83,
+            "wins": 0
+          },
+          "KRW-SOL": {
+            "trades": 2,
+            "pnl": -353.48,
+            "wins": 0
+          }
+        }
+      }
+    }
+  ],
+  "note": "자동으로 코드 수정하지 않음. candidate config는 사람이 확인 후 적용."
+}

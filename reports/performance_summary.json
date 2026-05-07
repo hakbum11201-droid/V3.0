@@ -1,0 +1,27 @@
+{
+  "total_trades": 4,
+  "win_rate": 0.0,
+  "avg_win_pct": 0.0,
+  "avg_loss_pct": -0.000942,
+  "profit_factor": 0.0,
+  "expectancy_krw": -188.3275,
+  "expectancy_pct": -0.000942,
+  "max_drawdown": -0.0005534706664597211,
+  "total_pnl_krw": -753.31,
+  "roi_pct": -0.00075331,
+  "best_market": "KRW-SOL",
+  "worst_market": "KRW-XRP",
+  "consecutive_losses": 4,
+  "by_market": {
+    "KRW-XRP": {
+      "trades": 2,
+      "pnl": -399.83,
+      "wins": 0
+    },
+    "KRW-SOL": {
+      "trades": 2,
+      "pnl": -353.48,
+      "wins": 0
+    }
+  }
+}
