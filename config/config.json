@@ -1,0 +1,82 @@
+{
+  "app": {
+    "name": "coinB PRO",
+    "version": "3.0.0",
+    "mode": "backtest",
+    "timezone": "Asia/Seoul"
+  },
+  "markets": [
+    "KRW-BTC",
+    "KRW-ETH",
+    "KRW-XRP"
+  ],
+  "paths": {
+    "data_dir": "data",
+    "logs_dir": "logs",
+    "reports_dir": "reports",
+    "runtime_dir": "runtime"
+  },
+  "exchange": {
+    "quote": "KRW",
+    "fee_rate": 0.0005,
+    "slippage_rate": 0.0007,
+    "min_order_krw": 5000,
+    "rate_limit_per_sec": 8
+  },
+  "portfolio": {
+    "initial_cash_krw": 1000000,
+    "max_open_positions": 3,
+    "max_position_krw": 250000,
+    "risk_per_trade_pct": 0.006,
+    "reserve_cash_pct": 0.15
+  },
+  "risk": {
+    "daily_loss_limit_pct": 0.025,
+    "total_loss_limit_pct": 0.08,
+    "max_consecutive_losses": 4,
+    "cooldown_after_loss_sec": 900,
+    "market_cooldown_after_2_losses_sec": 1800,
+    "min_expected_edge_pct": 0.002,
+    "max_atr_pct": 0.08,
+    "min_atr_pct": 0.002
+  },
+  "strategy": {
+    "ema_fast": 12,
+    "ema_slow": 36,
+    "rsi_period": 14,
+    "rsi_min": 42,
+    "rsi_max": 72,
+    "atr_period": 14,
+    "breakout_lookback": 20,
+    "volume_lookback": 20,
+    "volume_mult": 1.15,
+    "entry_score_threshold": 72,
+    "take_profit_atr": 2.2,
+    "stop_loss_atr": 1.2,
+    "trailing_atr": 1.4,
+    "max_holding_bars": 120
+  },
+  "regime": {
+    "btc_market": "KRW-BTC",
+    "ema_fast": 20,
+    "ema_slow": 60,
+    "risk_off_drawdown_pct": -0.035,
+    "risk_on_slope_min": 0.0002
+  },
+  "tuner": {
+    "entry_score_threshold": [
+      70,
+      75
+    ],
+    "volume_mult": [
+      1.05,
+      1.2
+    ],
+    "take_profit_atr": [
+      2.2
+    ],
+    "stop_loss_atr": [
+      1.2
+    ]
+  }
+}
