@@ -17,7 +17,7 @@ def _print_json(result: Dict[str, Any]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="coinB PRO v3.0.1",
-        description="coinB PRO paper/backtest/tuner command runner",
+        description="coinB PRO paper/backtest/tuner/orderflow command runner",
     )
 
     parser.add_argument(
@@ -28,6 +28,7 @@ def main() -> None:
             "report",
             "tune",
             "paper-check",
+            "collect-ws",
         ],
         help="실행할 명령",
     )
@@ -44,16 +45,33 @@ def main() -> None:
         help="백테스트용 OHLCV CSV 파일 경로",
     )
 
+    parser.add_argument(
+        "--seconds",
+        type=int,
+        default=30,
+        help="WebSocket 수집 시간(초)",
+    )
+
+    parser.add_argument(
+        "--output",
+        default="logs/upbit_ws_events.jsonl",
+        help="WebSocket 수집 로그 저장 경로",
+    )
+
     args = parser.parse_args()
 
     if args.command == "validate-config":
         cfg = load_config(args.config)
+        app_config = cfg.get("app", {})
+        live_config = cfg.get("live", {})
+
         result = {
             "ok": True,
             "command": "validate-config",
-            "app": cfg.get("app"),
+            "app": app_config,
             "markets": cfg.get("markets"),
-            "mode": cfg.get("mode"),
+            "mode": app_config.get("default_mode", "paper"),
+            "live": live_config,
         }
 
     elif args.command == "backtest":
@@ -70,11 +88,27 @@ def main() -> None:
         result = {
             "ok": True,
             "command": "paper-check",
+            "exchange": "upbit",
+            "market_type": "KRW",
             "mode": "paper_ready",
             "live_trading": "disabled",
             "markets": cfg.get("markets"),
             "message": "paper 모드 점검 완료. 실거래 주문은 차단되어 있습니다.",
         }
+
+    elif args.command == "collect-ws":
+        cfg = load_config(args.config)
+        markets = cfg.get("markets", [])
+
+        from .upbit_ws import collect_upbit_ws_events
+
+        result = collect_upbit_ws_events(
+            markets=markets,
+            output_path=args.output,
+            seconds=args.seconds,
+            include_trade=True,
+            include_orderbook=True,
+        )
 
     else:
         raise ValueError(f"unknown command: {args.command}")

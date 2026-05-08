@@ -26,6 +26,10 @@ echo [5] Validate CONFIG only
 echo.
 echo [6] Run TESTS only
 echo.
+echo [7] Collect Upbit WS data
+echo     - public trade/orderbook only
+echo     - output logs/upbit_ws_events.jsonl
+echo.
 echo [0] Exit
 echo.
 echo ========================================
@@ -37,6 +41,7 @@ if "%choice%"=="3" goto REPORT
 if "%choice%"=="4" goto TUNER
 if "%choice%"=="5" goto VALIDATE
 if "%choice%"=="6" goto TESTS
+if "%choice%"=="7" goto COLLECT_WS
 if "%choice%"=="0" goto END
 
 echo.
@@ -72,6 +77,11 @@ goto MENU
 :TESTS
 cls
 call "%~dp0run_tests.bat"
+goto MENU
+
+:COLLECT_WS
+cls
+call "%~dp0run_collect_ws.bat"
 goto MENU
 
 :END
