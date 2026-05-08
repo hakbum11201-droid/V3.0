@@ -14,45 +14,64 @@ cd <프로젝트 루트>
 $env:PYTHONPATH = "$PWD\src"
 ```
 
-### 1. 검증 명령 (기준선 확인)
+## 1. Offline Smoke Tests (네트워크/API 불필요, 샘플 데이터 기반)
+
+아래 명령들은 오프라인 환경이나 API 연결 없이도 실행 가능합니다.
 
 ```powershell
-python -m compileall src tests
-python -m unittest discover -s tests -p "test_*.py"
+# 1) 설정 유효성 검증
 python -m coinb.main validate-config --config config/config.json
+
+# 2) 샘플 데이터 기반 백테스트
+python -m coinb.main backtest --config config/config.json --csv data/sample_ohlcv.csv
+
+# 3) 성과 리포트 생성
+python -m coinb.main report --config config/config.json
+
+# 4) 설정 튜너 실행
+python -m coinb.main tune --config config/config.json --csv data/sample_ohlcv.csv
+
+# 5) 페이퍼 모드 체크
+python -m coinb.main paper-check --config config/config.json
 ```
 
 정상 기준:
-- `compileall` → 오류 없음
-- `unittest` → `Ran 40 tests ... OK`
 - `validate-config` → `"ok": true`, `"mode": "paper"`, `"live.enabled": false`
+- `backtest`, `report`, `tune` 정상 종료 및 `logs/`, `reports/`, `runtime/` 폴더 내 결과물 생성
 
-### 2. 메뉴 실행 (추천)
+## 2. Live Data Tests (네트워크/Upbit API 필수)
+
+아래 명령들은 인터넷 연결 및 Upbit Public WebSocket API 접근이 필요합니다. 네트워크 상태에 따라 실패할 수 있습니다.
+
+```powershell
+# 1) Upbit WebSocket 실시간 데이터 수집 (예: 5초)
+python -m coinb.main collect-ws --config config/config.json --seconds 5 --output logs/upbit_ws_events.jsonl
+
+# 2) 미시구조(Microstructure) 스냅샷 생성
+python -m coinb.main microstructure --micro-input logs/upbit_ws_events.jsonl --micro-output reports/microstructure_snapshot.json
+
+# 3) 주문 흐름(Orderflow) 페이퍼 스텝 실행
+python -m coinb.main orderflow-paper --config config/config.json --micro-output reports/microstructure_snapshot.json --paper-state runtime/orderflow_paper_state.json --paper-decisions logs/orderflow_paper_decisions.jsonl --paper-trades logs/orderflow_paper_trades.jsonl
+
+# 4) 머신러닝 학습 데이터셋 생성
+python -m coinb.main learning-log --paper-decisions logs/orderflow_paper_decisions.jsonl --paper-trades logs/orderflow_paper_trades.jsonl --learning-output logs/orderflow_learning_dataset.jsonl --learning-summary reports/orderflow_learning_summary.json
+
+# 5) 손실 분석(Loss Analysis) 리포트 생성
+python -m coinb.main loss-analysis --paper-decisions logs/orderflow_paper_decisions.jsonl --paper-trades logs/orderflow_paper_trades.jsonl --loss-output reports/orderflow_loss_analysis.json
+```
+
+## 3. 편리한 메뉴 실행
+
+위 명령들을 그룹화하여 쉽게 실행할 수 있습니다.
 
 ```
 START_COINB.bat
 ```
 
 메뉴 선택:
-- `[1]` Basic Check (validate → test → backtest → report)
-- `[2]` Orderflow Paper Cycle (WS수집 → microstructure → paper step → learning → loss)
-- `[3]` Tuner (설정 후보 생성, 코드 수정 없음)
-
----
-
-## Core Direction
-
-```text
-Upbit KRW market
-→ public WebSocket trade/orderbook collection
-→ microstructure feature calculation
-→ virtual buy/sell paper decision
-→ learning dataset generation
-→ loss pattern analysis
-→ config candidate tuning
-→ long-term paper verification
-→ tiny_live only after approval
-```
+- `[1]` Basic Check (Offline Smoke Tests 자동 실행)
+- `[2]` Orderflow Paper Cycle (Live Data Tests 자동 실행)
+- `[3]` Tuner (샘플 데이터 기반 설정 후보 생성)
 
 ---
 
@@ -62,10 +81,10 @@ Upbit KRW market
 src/coinb/          Python 소스 패키지
 tests/              unittest 테스트
 config/config.json  설정 파일 (live.enabled=false 고정)
-data/               샘플 OHLCV CSV
-logs/               실행 로그
-reports/            분석 리포트
-runtime/            paper 상태 저장
+data/               샘플 OHLCV CSV (오프라인 테스트용)
+logs/               실행 로그 (자동 생성)
+reports/            분석 리포트 (자동 생성)
+runtime/            paper 상태 저장 (자동 생성)
 START_COINB.bat     Windows 메뉴 실행기
 ```
 
