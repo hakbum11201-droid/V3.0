@@ -40,7 +40,7 @@ config/secrets.json
 *.bak
 *.log
 
-# Do not ignore source/config/docs/tests
+# Source folders should stay tracked
 !src/
 !config/
 !docs/
