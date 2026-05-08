@@ -1,4 +1,47 @@
+# Python cache
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE / editor
+.vs/
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Runtime outputs
+logs/*.jsonl
+reports/*.json
+runtime/*.json
+
+# Keep folder placeholders
+!logs/.gitkeep
+!reports/.gitkeep
+!runtime/.gitkeep
+
+# Local secrets / keys
 .env
-runtime/_tuner_config.json
+.env.*
+*.key
+*.pem
+secrets/
+config/secrets.json
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+
+# Do not ignore source/config/docs/tests
+!src/
+!config/
+!docs/
+!tests/

@@ -5,8 +5,9 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
 from .config_loader import load_config
+from .execution_model import simulate_virtual_buy_fill, simulate_virtual_sell_fill
 from .jsonl import append_jsonl, read_json, write_json
-from .market_rules import calc_fee_krw, is_min_order_ok
+from .market_rules import is_min_order_ok
 
 
 @dataclass
@@ -74,17 +75,17 @@ def run_orderflow_paper_step(
         if not isinstance(features, dict):
             continue
 
-        price = get_executable_price(features)
+        price = get_reference_price(features)
 
         if price <= 0:
-            decision = PaperDecision(
-                timestamp=now,
+            decision = make_decision(
                 market=market,
                 action="SKIP",
                 reason="invalid_price",
                 score=0.0,
                 price=0.0,
-                details=features,
+                features=features,
+                extra={},
             )
             decisions.append(decision)
             append_jsonl(decisions_path, decision.to_dict())
@@ -99,7 +100,7 @@ def run_orderflow_paper_step(
                 config=config,
                 state=state,
                 market=market,
-                price=price,
+                features=features,
                 reason_exit=exit_reason,
                 now=now,
             )
@@ -108,24 +109,35 @@ def run_orderflow_paper_step(
                 trades.append(trade)
                 append_jsonl(trades_path, trade.to_dict())
 
+                decision = make_decision(
+                    market=market,
+                    action="VIRTUAL_SELL",
+                    reason=exit_reason,
+                    score=float(features.get("continuation_score", 0.0)),
+                    price=trade.exit_price,
+                    features=features,
+                    extra={"trade": trade.to_dict()},
+                )
+                decisions.append(decision)
+                append_jsonl(decisions_path, decision.to_dict())
+
             continue
 
         if has_position(state, market):
-            decision = PaperDecision(
-                timestamp=now,
+            decision = make_decision(
                 market=market,
                 action="HOLD_POSITION",
                 reason="position_already_open",
                 score=float(features.get("continuation_score", 0.0)),
                 price=price,
-                details=features,
+                features=features,
+                extra={},
             )
             decisions.append(decision)
             append_jsonl(decisions_path, decision.to_dict())
             continue
 
         entry_decision = check_entry_condition(config, state, market, features, price)
-
         decisions.append(entry_decision)
         append_jsonl(decisions_path, entry_decision.to_dict())
 
@@ -134,7 +146,6 @@ def run_orderflow_paper_step(
                 config=config,
                 state=state,
                 market=market,
-                price=price,
                 reason_entry=entry_decision.reason,
                 features=features,
                 now=now,
@@ -149,6 +160,7 @@ def run_orderflow_paper_step(
         "exchange": "upbit",
         "market_type": "KRW",
         "mode": "paper",
+        "execution_model": config.get("execution", {}).get("paper_fill_model", "orderbook_depth_v1"),
         "microstructure_path": microstructure_path,
         "state_path": state_path,
         "decisions_path": decisions_path,
@@ -197,6 +209,7 @@ def check_entry_condition(
     portfolio = config.get("portfolio", {})
     risk = config.get("risk", {})
     micro = config.get("microstructure", {})
+    execution = config.get("execution", {})
 
     cash_krw = float(state.get("cash_krw", 0.0))
     positions = state.get("positions", {})
@@ -205,6 +218,7 @@ def check_entry_condition(
     max_position_krw = float(portfolio.get("max_position_krw", 100_000))
     position_size_pct = float(portfolio.get("position_size_pct", 10.0))
     min_order_krw = float(risk.get("min_order_krw", 5_000))
+    fee_rate = float(risk.get("fee_rate", 0.0005))
 
     max_spread_pct = float(micro.get("max_spread_pct", 0.12))
     min_trade_value_3s = float(micro.get("min_trade_value_3s", 30_000_000))
@@ -212,6 +226,11 @@ def check_entry_condition(
     ofi_min = float(micro.get("ofi_score_min", 50))
     sweep_min = float(micro.get("sweep_score_min", 70))
     absorption_min = float(micro.get("absorption_score_min", 65))
+    depth_ratio_min = float(micro.get("bid_ask_depth_ratio_min", 1.05))
+
+    max_depth_take_ratio = float(execution.get("max_depth_take_ratio", 0.10))
+    min_liquidity_multiple = float(execution.get("min_liquidity_multiple", 3.0))
+    extra_slippage_pct = float(execution.get("extra_slippage_pct", 0.03))
 
     continuation_score = float(features.get("continuation_score", 0.0))
     ofi_score = float(features.get("ofi_score", 0.0))
@@ -219,77 +238,135 @@ def check_entry_condition(
     absorption_score = float(features.get("absorption_score", 0.0))
     spread_pct = float(features.get("spread_pct", 999.0))
     buy_trade_value_3s = float(features.get("buy_trade_value_3s", 0.0))
+    depth_ratio = float(features.get("bid_ask_depth_ratio_5", 0.0))
 
     score = calc_entry_score(features)
 
     if len(positions) >= max_open_positions:
-        return make_decision(market, "NO_BUY", "max_open_positions", score, price, features)
+        return make_decision(market, "NO_BUY", "max_open_positions", score, price, features, {})
 
     if cash_krw < min_order_krw:
-        return make_decision(market, "NO_BUY", "cash_below_min_order", score, price, features)
+        return make_decision(market, "NO_BUY", "cash_below_min_order", score, price, features, {})
 
     if spread_pct > max_spread_pct:
-        return make_decision(market, "NO_BUY", "spread_too_wide", score, price, features)
+        return make_decision(market, "NO_BUY", "spread_too_wide", score, price, features, {})
 
     if buy_trade_value_3s < min_trade_value_3s:
-        return make_decision(market, "NO_BUY", "trade_value_3s_too_low", score, price, features)
+        return make_decision(market, "NO_BUY", "trade_value_3s_too_low", score, price, features, {})
+
+    if depth_ratio < depth_ratio_min:
+        return make_decision(market, "NO_BUY", "depth_ratio_too_weak", score, price, features, {})
 
     continuation_ok = continuation_score >= continuation_min
     sweep_ok = ofi_score >= ofi_min and sweep_score >= sweep_min
     absorption_ok = absorption_score >= absorption_min and ofi_score >= ofi_min
 
     if not (continuation_ok or sweep_ok or absorption_ok):
-        return make_decision(market, "NO_BUY", "orderflow_signal_not_enough", score, price, features)
+        return make_decision(market, "NO_BUY", "orderflow_signal_not_enough", score, price, features, {})
 
     equity_krw = calc_equity_krw(state)
-    amount_krw = min(max_position_krw, equity_krw * (position_size_pct / 100.0), cash_krw)
+    requested_krw = min(
+        max_position_krw,
+        equity_krw * (position_size_pct / 100.0),
+        cash_krw,
+    )
 
-    if not is_min_order_ok(amount_krw, min_order_krw):
-        return make_decision(market, "NO_BUY", "amount_below_min_order", score, price, features)
+    if not is_min_order_ok(requested_krw, min_order_krw):
+        return make_decision(market, "NO_BUY", "amount_below_min_order", score, price, features, {})
 
-    return make_decision(market, "VIRTUAL_BUY", "orderflow_entry", score, price, features)
+    fill = simulate_virtual_buy_fill(
+        market=market,
+        features=features,
+        requested_krw=requested_krw,
+        fee_rate=fee_rate,
+        min_order_krw=min_order_krw,
+        max_depth_take_ratio=max_depth_take_ratio,
+        min_liquidity_multiple=min_liquidity_multiple,
+        extra_slippage_pct=extra_slippage_pct,
+    )
+
+    if not fill.ok:
+        return make_decision(
+            market=market,
+            action="NO_BUY",
+            reason=f"fill_blocked:{fill.reason}",
+            score=score,
+            price=price,
+            features=features,
+            extra={"fill": fill.to_dict()},
+        )
+
+    return make_decision(
+        market=market,
+        action="VIRTUAL_BUY",
+        reason="orderflow_entry_depth_checked",
+        score=score,
+        price=fill.price,
+        features=features,
+        extra={"fill": fill.to_dict()},
+    )
 
 
 def virtual_buy(
     config: Dict[str, Any],
     state: Dict[str, Any],
     market: str,
-    price: float,
     reason_entry: str,
     features: Dict[str, Any],
     now: float,
 ) -> None:
     portfolio = config.get("portfolio", {})
     risk = config.get("risk", {})
+    execution = config.get("execution", {})
 
     max_position_krw = float(portfolio.get("max_position_krw", 100_000))
     position_size_pct = float(portfolio.get("position_size_pct", 10.0))
     fee_rate = float(risk.get("fee_rate", 0.0005))
+    min_order_krw = float(risk.get("min_order_krw", 5_000))
+
+    max_depth_take_ratio = float(execution.get("max_depth_take_ratio", 0.10))
+    min_liquidity_multiple = float(execution.get("min_liquidity_multiple", 3.0))
+    extra_slippage_pct = float(execution.get("extra_slippage_pct", 0.03))
 
     cash_krw = float(state.get("cash_krw", 0.0))
     equity_krw = calc_equity_krw(state)
-    amount_krw = min(max_position_krw, equity_krw * (position_size_pct / 100.0), cash_krw)
+    requested_krw = min(
+        max_position_krw,
+        equity_krw * (position_size_pct / 100.0),
+        cash_krw,
+    )
 
-    fee_krw = calc_fee_krw(amount_krw, fee_rate)
-    net_amount_krw = amount_krw - fee_krw
-    qty = net_amount_krw / price if price > 0 else 0.0
+    fill = simulate_virtual_buy_fill(
+        market=market,
+        features=features,
+        requested_krw=requested_krw,
+        fee_rate=fee_rate,
+        min_order_krw=min_order_krw,
+        max_depth_take_ratio=max_depth_take_ratio,
+        min_liquidity_multiple=min_liquidity_multiple,
+        extra_slippage_pct=extra_slippage_pct,
+    )
 
-    state["cash_krw"] = cash_krw - amount_krw
+    if not fill.ok:
+        return
 
+    state["cash_krw"] = cash_krw - fill.filled_krw
     state.setdefault("positions", {})
+
     state["positions"][market] = {
         "market": market,
         "entry_timestamp": now,
-        "entry_price": price,
-        "qty": qty,
-        "amount_krw": amount_krw,
-        "entry_fee_krw": fee_krw,
+        "entry_price": fill.price,
+        "qty": fill.qty,
+        "amount_krw": fill.filled_krw,
+        "entry_fee_krw": fill.fee_krw,
         "reason_entry": reason_entry,
-        "peak_price": price,
-        "trough_price": price,
+        "peak_price": fill.price,
+        "trough_price": fill.price,
         "max_profit_pct": 0.0,
         "max_drawdown_pct": 0.0,
         "entry_features": features,
+        "entry_fill": fill.to_dict(),
     }
 
     stats = state.setdefault("stats", {})
@@ -315,7 +392,7 @@ def check_exit_condition(
 
     position = state["positions"][market]
     entry_price = float(position.get("entry_price", 0.0))
-    current_price = get_executable_price(features)
+    current_price = get_exit_reference_price(features)
 
     if entry_price <= 0 or current_price <= 0:
         return None
@@ -343,7 +420,7 @@ def virtual_sell(
     config: Dict[str, Any],
     state: Dict[str, Any],
     market: str,
-    price: float,
+    features: Dict[str, Any],
     reason_exit: str,
     now: float,
 ) -> Optional[PaperTrade]:
@@ -351,7 +428,13 @@ def virtual_sell(
         return None
 
     risk = config.get("risk", {})
+    execution = config.get("execution", {})
+
     fee_rate = float(risk.get("fee_rate", 0.0005))
+    max_depth_take_ratio = float(execution.get("max_depth_take_ratio", 0.10))
+    min_liquidity_multiple = float(execution.get("min_liquidity_multiple", 3.0))
+    extra_slippage_pct = float(execution.get("extra_slippage_pct", 0.03))
+    allow_forced_exit = bool(execution.get("allow_forced_exit_on_low_liquidity", True))
 
     position = state["positions"][market]
 
@@ -360,10 +443,22 @@ def virtual_sell(
     entry_fee_krw = float(position.get("entry_fee_krw", 0.0))
     entry_timestamp = float(position.get("entry_timestamp", now))
 
-    gross_exit_krw = price * qty
-    exit_fee_krw = calc_fee_krw(gross_exit_krw, fee_rate)
-    net_exit_krw = gross_exit_krw - exit_fee_krw
+    fill = simulate_virtual_sell_fill(
+        market=market,
+        features=features,
+        qty=qty,
+        entry_price=entry_price,
+        fee_rate=fee_rate,
+        max_depth_take_ratio=max_depth_take_ratio,
+        min_liquidity_multiple=min_liquidity_multiple,
+        extra_slippage_pct=extra_slippage_pct,
+        allow_forced_exit_on_low_liquidity=allow_forced_exit,
+    )
 
+    if not fill.ok:
+        return None
+
+    net_exit_krw = fill.filled_krw - fill.fee_krw
     entry_value_krw = entry_price * qty
     pnl_krw = net_exit_krw - entry_value_krw
     pnl_pct = (pnl_krw / entry_value_krw) * 100.0 if entry_value_krw > 0 else 0.0
@@ -379,13 +474,13 @@ def virtual_sell(
         market=market,
         side="VIRTUAL_SELL",
         entry_price=entry_price,
-        exit_price=price,
+        exit_price=fill.price,
         qty=qty,
         pnl_krw=pnl_krw,
         pnl_pct=pnl_pct,
-        fee_krw=entry_fee_krw + exit_fee_krw,
+        fee_krw=entry_fee_krw + fill.fee_krw,
         reason_entry=str(position.get("reason_entry", "")),
-        reason_exit=reason_exit,
+        reason_exit=f"{reason_exit}:{fill.reason}",
         max_profit_pct=float(position.get("max_profit_pct", 0.0)),
         max_drawdown_pct=float(position.get("max_drawdown_pct", 0.0)),
         holding_seconds=now - entry_timestamp,
@@ -396,11 +491,7 @@ def virtual_sell(
     return trade
 
 
-def update_position_stats(
-    state: Dict[str, Any],
-    market: str,
-    price: float,
-) -> None:
+def update_position_stats(state: Dict[str, Any], market: str, price: float) -> None:
     if not has_position(state, market):
         return
 
@@ -422,12 +513,22 @@ def update_position_stats(
     position["max_drawdown_pct"] = min(float(position.get("max_drawdown_pct", 0.0)), max_drawdown_pct)
 
 
-def get_executable_price(features: Dict[str, Any]) -> float:
+def get_reference_price(features: Dict[str, Any]) -> float:
     best_ask = float(features.get("best_ask", 0.0))
     last_trade_price = float(features.get("last_trade_price", 0.0))
 
     if best_ask > 0:
         return best_ask
+
+    return last_trade_price
+
+
+def get_exit_reference_price(features: Dict[str, Any]) -> float:
+    best_bid = float(features.get("best_bid", 0.0))
+    last_trade_price = float(features.get("last_trade_price", 0.0))
+
+    if best_bid > 0:
+        return best_bid
 
     return last_trade_price
 
@@ -472,7 +573,23 @@ def make_decision(
     score: float,
     price: float,
     features: Dict[str, Any],
+    extra: Dict[str, Any],
 ) -> PaperDecision:
+    details = {
+        "ofi_score": features.get("ofi_score"),
+        "sweep_score": features.get("sweep_score"),
+        "absorption_score": features.get("absorption_score"),
+        "continuation_score": features.get("continuation_score"),
+        "spread_pct": features.get("spread_pct"),
+        "buy_trade_value_3s": features.get("buy_trade_value_3s"),
+        "sell_trade_value_3s": features.get("sell_trade_value_3s"),
+        "bid_ask_depth_ratio_5": features.get("bid_ask_depth_ratio_5"),
+        "bid_depth_5_krw": features.get("bid_depth_5_krw"),
+        "ask_depth_5_krw": features.get("ask_depth_5_krw"),
+    }
+
+    details.update(extra)
+
     return PaperDecision(
         timestamp=time.time(),
         market=market,
@@ -480,14 +597,5 @@ def make_decision(
         reason=reason,
         score=score,
         price=price,
-        details={
-            "ofi_score": features.get("ofi_score"),
-            "sweep_score": features.get("sweep_score"),
-            "absorption_score": features.get("absorption_score"),
-            "continuation_score": features.get("continuation_score"),
-            "spread_pct": features.get("spread_pct"),
-            "buy_trade_value_3s": features.get("buy_trade_value_3s"),
-            "sell_trade_value_3s": features.get("sell_trade_value_3s"),
-            "bid_ask_depth_ratio_5": features.get("bid_ask_depth_ratio_5"),
-        },
+        details=details,
     )
