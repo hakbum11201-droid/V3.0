@@ -18,6 +18,9 @@ class PaperDecision:
     reason: str
     score: float
     price: float
+    expected_edge: float
+    slippage_estimate: float
+    virtual_fill_result: Dict[str, Any]
     details: Dict[str, Any]
 
     def to_dict(self) -> Dict[str, Any]:
@@ -596,6 +599,8 @@ def make_decision(
 
     details.update(extra)
 
+    fill_result = extra.get("fill", {})
+
     return PaperDecision(
         timestamp=time.time(),
         market=market,
@@ -603,5 +608,8 @@ def make_decision(
         reason=reason,
         score=score,
         price=price,
+        expected_edge=float(features.get("continuation_score", 0.0)),
+        slippage_estimate=abs(price - float(features.get("best_ask", price))) / price * 100 if price > 0 else 0.0,
+        virtual_fill_result=fill_result,
         details=details,
     )

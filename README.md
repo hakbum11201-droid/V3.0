@@ -73,6 +73,23 @@ START_COINB.bat
 - `[2]` Orderflow Paper Cycle (Live Data Tests 자동 실행)
 - `[3]` Tuner (샘플 데이터 기반 설정 후보 생성)
 
+## 4. Paper Data Collection (데이터 축적 실행 방법)
+
+V3.1 데이터 수집 및 학습 흐름을 위한 Paper 데이터 축적은 다음 스크립트로 진행합니다. 공개 웹소켓으로 데이터를 수집하여 판단/결과 로그를 누적합니다.
+
+```powershell
+$env:PYTHONPATH = "$PWD\src"
+# 1) 일정 시간 WS 수집 (데이터 축적)
+python -m coinb.main collect-ws --config config/config.json --seconds 3600 --output logs/upbit_ws_events.jsonl
+
+# 2) 수집된 데이터로 Paper 판단 및 학습 로그 생성
+python -m coinb.main microstructure --micro-input logs/upbit_ws_events.jsonl --micro-output reports/microstructure_snapshot.json
+python -m coinb.main orderflow-paper --config config/config.json --micro-output reports/microstructure_snapshot.json --paper-state runtime/orderflow_paper_state.json --paper-decisions logs/orderflow_paper_decisions.jsonl --paper-trades logs/orderflow_paper_trades.jsonl
+python -m coinb.main learning-log --paper-decisions logs/orderflow_paper_decisions.jsonl --paper-trades logs/orderflow_paper_trades.jsonl --learning-output logs/orderflow_learning_dataset.jsonl --learning-summary reports/orderflow_learning_summary.json
+python -m coinb.main loss-analysis --paper-decisions logs/orderflow_paper_decisions.jsonl --paper-trades logs/orderflow_paper_trades.jsonl --loss-output reports/orderflow_loss_analysis.json
+```
+위 과정을 통해 `logs/` 디렉토리에 판단 기록(`orderflow_paper_decisions.jsonl`), 거래 기록(`orderflow_paper_trades.jsonl`), 학습용 데이터셋(`orderflow_learning_dataset.jsonl`)이 누적 생성됩니다.
+
 ---
 
 ## Project Structure
