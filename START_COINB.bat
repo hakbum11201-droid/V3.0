@@ -33,6 +33,10 @@ echo [6] Run Orderflow Paper Step only
 echo.
 echo [7] Build Learning Dataset only
 echo.
+echo [8] Run Loss Analysis
+echo     - analyze paper trades and rejection reasons
+echo     - output reports/orderflow_loss_analysis.json
+echo.
 echo [0] Exit
 echo.
 echo ========================================
@@ -45,6 +49,7 @@ if "%choice%"=="4" goto COLLECT_WS
 if "%choice%"=="5" goto MICROSTRUCTURE
 if "%choice%"=="6" goto ORDERFLOW_PAPER
 if "%choice%"=="7" goto LEARNING_LOG
+if "%choice%"=="8" goto LOSS_ANALYSIS
 if "%choice%"=="0" goto END
 
 echo.
@@ -94,17 +99,17 @@ echo ========================================
 echo This is PAPER ONLY. Live trading is disabled.
 echo.
 
-echo [1/4] Collect Upbit WS data
+echo [1/5] Collect Upbit WS data
 python -m coinb.main collect-ws --config config/config.json --seconds 30 --output logs/upbit_ws_events.jsonl
 if errorlevel 1 goto FAIL
 
 echo.
-echo [2/4] Build microstructure snapshot
+echo [2/5] Build microstructure snapshot
 python -m coinb.main microstructure --micro-input logs/upbit_ws_events.jsonl --micro-output reports/microstructure_snapshot.json
 if errorlevel 1 goto FAIL
 
 echo.
-echo [3/4] Run orderflow paper step
+echo [3/5] Run orderflow paper step
 python -m coinb.main orderflow-paper ^
   --config config/config.json ^
   --micro-output reports/microstructure_snapshot.json ^
@@ -114,12 +119,20 @@ python -m coinb.main orderflow-paper ^
 if errorlevel 1 goto FAIL
 
 echo.
-echo [4/4] Build learning dataset
+echo [4/5] Build learning dataset
 python -m coinb.main learning-log ^
   --paper-decisions logs/orderflow_paper_decisions.jsonl ^
   --paper-trades logs/orderflow_paper_trades.jsonl ^
   --learning-output logs/orderflow_learning_dataset.jsonl ^
   --learning-summary reports/orderflow_learning_summary.json
+if errorlevel 1 goto FAIL
+
+echo.
+echo [5/5] Run loss analysis
+python -m coinb.main loss-analysis ^
+  --paper-decisions logs/orderflow_paper_decisions.jsonl ^
+  --paper-trades logs/orderflow_paper_trades.jsonl ^
+  --loss-output reports/orderflow_loss_analysis.json
 if errorlevel 1 goto FAIL
 
 echo.
@@ -133,6 +146,7 @@ echo - logs/orderflow_paper_decisions.jsonl
 echo - logs/orderflow_paper_trades.jsonl
 echo - logs/orderflow_learning_dataset.jsonl
 echo - reports/orderflow_learning_summary.json
+echo - reports/orderflow_loss_analysis.json
 pause
 goto MENU
 
@@ -202,6 +216,22 @@ python -m coinb.main learning-log ^
 if errorlevel 1 goto FAIL
 echo.
 echo [OK] Learning dataset generated.
+pause
+goto MENU
+
+:LOSS_ANALYSIS
+cls
+echo ========================================
+echo Run loss analysis
+echo ========================================
+python -m coinb.main loss-analysis ^
+  --paper-decisions logs/orderflow_paper_decisions.jsonl ^
+  --paper-trades logs/orderflow_paper_trades.jsonl ^
+  --loss-output reports/orderflow_loss_analysis.json
+if errorlevel 1 goto FAIL
+echo.
+echo [OK] Loss analysis completed.
+echo Output: reports/orderflow_loss_analysis.json
 pause
 goto MENU
 

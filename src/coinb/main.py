@@ -32,6 +32,7 @@ def main() -> None:
             "microstructure",
             "orderflow-paper",
             "learning-log",
+            "loss-analysis",
         ],
         help="실행할 명령",
     )
@@ -101,6 +102,12 @@ def main() -> None:
         "--learning-summary",
         default="reports/orderflow_learning_summary.json",
         help="학습 데이터 요약 리포트 저장 경로",
+    )
+
+    parser.add_argument(
+        "--loss-output",
+        default="reports/orderflow_loss_analysis.json",
+        help="손실 패턴 분석 리포트 저장 경로",
     )
 
     args = parser.parse_args()
@@ -182,6 +189,15 @@ def main() -> None:
             trades_path=args.paper_trades,
             output_path=args.learning_output,
             summary_path=args.learning_summary,
+        )
+
+    elif args.command == "loss-analysis":
+        from .orderflow_loss_analyzer import build_orderflow_loss_analysis
+
+        result = build_orderflow_loss_analysis(
+            decisions_path=args.paper_decisions,
+            trades_path=args.paper_trades,
+            output_path=args.loss_output,
         )
 
     else:
