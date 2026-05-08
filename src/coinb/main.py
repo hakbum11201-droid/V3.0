@@ -29,6 +29,9 @@ def main() -> None:
             "tune",
             "paper-check",
             "collect-ws",
+            "microstructure",
+            "orderflow-paper",
+            "learning-log",
         ],
         help="실행할 명령",
     )
@@ -56,6 +59,48 @@ def main() -> None:
         "--output",
         default="logs/upbit_ws_events.jsonl",
         help="WebSocket 수집 로그 저장 경로",
+    )
+
+    parser.add_argument(
+        "--micro-input",
+        default="logs/upbit_ws_events.jsonl",
+        help="Microstructure 계산용 입력 로그 경로",
+    )
+
+    parser.add_argument(
+        "--micro-output",
+        default="reports/microstructure_snapshot.json",
+        help="Microstructure 계산 결과 저장 경로",
+    )
+
+    parser.add_argument(
+        "--paper-state",
+        default="runtime/orderflow_paper_state.json",
+        help="Orderflow paper 상태 저장 경로",
+    )
+
+    parser.add_argument(
+        "--paper-decisions",
+        default="logs/orderflow_paper_decisions.jsonl",
+        help="Orderflow paper 판단 로그 경로",
+    )
+
+    parser.add_argument(
+        "--paper-trades",
+        default="logs/orderflow_paper_trades.jsonl",
+        help="Orderflow paper 거래 로그 경로",
+    )
+
+    parser.add_argument(
+        "--learning-output",
+        default="logs/orderflow_learning_dataset.jsonl",
+        help="학습 데이터셋 저장 경로",
+    )
+
+    parser.add_argument(
+        "--learning-summary",
+        default="reports/orderflow_learning_summary.json",
+        help="학습 데이터 요약 리포트 저장 경로",
     )
 
     args = parser.parse_args()
@@ -108,6 +153,35 @@ def main() -> None:
             seconds=args.seconds,
             include_trade=True,
             include_orderbook=True,
+        )
+
+    elif args.command == "microstructure":
+        from .microstructure import build_microstructure_report
+
+        result = build_microstructure_report(
+            input_path=args.micro_input,
+            output_path=args.micro_output,
+        )
+
+    elif args.command == "orderflow-paper":
+        from .orderflow_paper import run_orderflow_paper_step
+
+        result = run_orderflow_paper_step(
+            config_path=args.config,
+            microstructure_path=args.micro_output,
+            state_path=args.paper_state,
+            decisions_path=args.paper_decisions,
+            trades_path=args.paper_trades,
+        )
+
+    elif args.command == "learning-log":
+        from .learning_log import build_learning_dataset
+
+        result = build_learning_dataset(
+            decisions_path=args.paper_decisions,
+            trades_path=args.paper_trades,
+            output_path=args.learning_output,
+            summary_path=args.learning_summary,
         )
 
     else:
