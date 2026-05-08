@@ -137,10 +137,20 @@ def build_loss_summary(trades: List[Dict[str, Any]]) -> Dict[str, Any]:
         }
 
     exit_reason_counts: Dict[str, int] = defaultdict(int)
+    loss_classification: Dict[str, int] = defaultdict(int)
 
     for trade in losses:
         reason = str(trade.get("reason_exit", "UNKNOWN"))
         exit_reason_counts[reason] += 1
+        
+        if "stop_loss" in reason:
+            loss_classification["STOP_LOSS_HIT"] += 1
+        elif "max_holding" in reason:
+            loss_classification["TIME_STOP"] += 1
+        elif "weak_continuation" in reason:
+            loss_classification["MOMENTUM_LOSS"] += 1
+        else:
+            loss_classification["OTHER"] += 1
 
     worst_trade = min(
         losses,
@@ -153,6 +163,7 @@ def build_loss_summary(trades: List[Dict[str, Any]]) -> Dict[str, Any]:
         "avg_loss_pct": round(average([_to_float(t.get("pnl_pct", 0.0)) for t in losses]), 4),
         "worst_trade": worst_trade,
         "exit_reason_counts": dict(exit_reason_counts),
+        "loss_classification": dict(loss_classification),
     }
 
 

@@ -106,6 +106,8 @@ def build_trade_learning_row(trade: Dict[str, Any]) -> Dict[str, Any]:
         "outcome_known": True,
         "pnl_krw": pnl_krw,
         "pnl_pct": pnl_pct,
+        "expected_edge": _to_float(trade.get("expected_edge", 0.0)),
+        "slippage_estimate": _to_float(trade.get("slippage_estimate", 0.0)),
     }
 
     for key in FEATURE_KEYS:

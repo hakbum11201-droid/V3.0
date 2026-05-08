@@ -40,6 +40,9 @@ class PaperTrade:
     max_profit_pct: float
     max_drawdown_pct: float
     holding_seconds: float
+    expected_edge: float
+    slippage_estimate: float
+    virtual_fill_result: Dict[str, Any]
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -243,26 +246,26 @@ def check_entry_condition(
     score = calc_entry_score(features)
 
     if len(positions) >= max_open_positions:
-        return make_decision(market, "NO_BUY", "max_open_positions", score, price, features, {})
+        return make_decision(market, "NO_BUY", "RISK_BLOCKED:MAX_POSITIONS", score, price, features, {})
 
     if cash_krw < min_order_krw:
-        return make_decision(market, "NO_BUY", "cash_below_min_order", score, price, features, {})
+        return make_decision(market, "NO_BUY", "RISK_BLOCKED:NO_CASH", score, price, features, {})
 
     if spread_pct > max_spread_pct:
-        return make_decision(market, "NO_BUY", "spread_too_wide", score, price, features, {})
+        return make_decision(market, "NO_BUY", "SPREAD_TOO_WIDE", score, price, features, {})
 
     if buy_trade_value_3s < min_trade_value_3s:
-        return make_decision(market, "NO_BUY", "trade_value_3s_too_low", score, price, features, {})
+        return make_decision(market, "NO_BUY", "LOW_VOLUME", score, price, features, {})
 
     if depth_ratio < depth_ratio_min:
-        return make_decision(market, "NO_BUY", "depth_ratio_too_weak", score, price, features, {})
+        return make_decision(market, "NO_BUY", "LOW_IMBALANCE", score, price, features, {})
 
     continuation_ok = continuation_score >= continuation_min
     sweep_ok = ofi_score >= ofi_min and sweep_score >= sweep_min
     absorption_ok = absorption_score >= absorption_min and ofi_score >= ofi_min
 
     if not (continuation_ok or sweep_ok or absorption_ok):
-        return make_decision(market, "NO_BUY", "orderflow_signal_not_enough", score, price, features, {})
+        return make_decision(market, "NO_BUY", "LOW_MOMENTUM", score, price, features, {})
 
     equity_krw = calc_equity_krw(state)
     requested_krw = min(
@@ -272,7 +275,7 @@ def check_entry_condition(
     )
 
     if not is_min_order_ok(requested_krw, min_order_krw):
-        return make_decision(market, "NO_BUY", "amount_below_min_order", score, price, features, {})
+        return make_decision(market, "NO_BUY", "RISK_BLOCKED:MIN_ORDER", score, price, features, {})
 
     fill = simulate_virtual_buy_fill(
         market=market,
@@ -289,7 +292,7 @@ def check_entry_condition(
         return make_decision(
             market=market,
             action="NO_BUY",
-            reason=f"fill_blocked:{fill.reason}",
+            reason=f"FILL_FAILED:{fill.reason}",
             score=score,
             price=price,
             features=features,
@@ -299,7 +302,7 @@ def check_entry_condition(
     return make_decision(
         market=market,
         action="VIRTUAL_BUY",
-        reason="orderflow_entry_depth_checked",
+        reason="ENTRY_APPROVED",
         score=score,
         price=fill.price,
         features=features,
@@ -484,6 +487,9 @@ def virtual_sell(
         max_profit_pct=float(position.get("max_profit_pct", 0.0)),
         max_drawdown_pct=float(position.get("max_drawdown_pct", 0.0)),
         holding_seconds=now - entry_timestamp,
+        expected_edge=float(features.get("continuation_score", 0.0)),
+        slippage_estimate=abs(fill.price - entry_price) / entry_price * 100 if entry_price else 0,
+        virtual_fill_result=fill.to_dict(),
     )
 
     del state["positions"][market]
