@@ -9,7 +9,6 @@ echo [STEP 0] Creating experiment directories and initializing logs...
 if not exist "logs\experiments" mkdir "logs\experiments"
 if not exist "reports\experiments" mkdir "reports\experiments"
 
-:: Initialize/Clear files
 if exist "logs\experiments\conservative_ws_events.jsonl" del "logs\experiments\conservative_ws_events.jsonl"
 if exist "logs\experiments\conservative_decisions.jsonl" del "logs\experiments\conservative_decisions.jsonl"
 if exist "logs\experiments\conservative_trades.jsonl" del "logs\experiments\conservative_trades.jsonl"
@@ -28,11 +27,11 @@ for /L %%i in (1,1,60) do (
     echo.
     echo --- Cycle %%i / 60 ---
     
-    echo [%%i/60] Collecting WS events (30 sec)...
+    echo [%%i/60] Collecting WS events - 30 sec
     python -m coinb.main collect-ws --config %CONFIG% --seconds 30 --output logs\experiments\conservative_ws_events_temp.jsonl
     if !ERRORLEVEL! NEQ 0 goto :error
     
-    :: Append temp ws events to main ws log
+    rem Append temp ws events to main ws log
     type logs\experiments\conservative_ws_events_temp.jsonl >> logs\experiments\conservative_ws_events.jsonl
     del logs\experiments\conservative_ws_events_temp.jsonl
 
