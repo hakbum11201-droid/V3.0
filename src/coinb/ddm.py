@@ -135,20 +135,25 @@ def run_ddm_status(config_path: str, output_path: str) -> Dict[str, Any]:
         })
 
     # 3.7. Paper Performance
-    summary = loss_analysis.get("summary", {})
-    trade_count = summary.get("trade_count", summary.get("total_trades", 0))
+    perf = _load_json_safe("reports/paper_performance.json")
+    # 파일이 없으면 기존 loss_analysis에서 요약을 시도
+    perf_summary = perf if perf else loss_analysis.get("summary", {})
+    
+    trade_count = perf_summary.get("trade_count", 0)
     if trade_count == 0:
         metrics["insufficient_trade_data"] = True
     else:
-        mdd = summary.get("max_drawdown_pct", 0.0)
-        cons_loss = summary.get("consecutive_losses", 0)
+        mdd = perf_summary.get("max_drawdown_pct", 0.0)
+        cons_loss = perf_summary.get("consecutive_losses", 0)
+        total_pnl_pct = perf_summary.get("total_pnl_pct", 0.0)
         
+        # MDD Check
         if mdd >= 5.0:
             risk_items.append({
                 "code": "HIGH_MDD_SEVERE",
                 "severity": "BLOCK_NEW_ENTRY",
                 "message": f"Max drawdown reached {mdd:.2f}%.",
-                "source": "loss_analysis",
+                "source": "paper_performance",
                 "actual": mdd,
                 "threshold": 5.0
             })
@@ -157,17 +162,18 @@ def run_ddm_status(config_path: str, output_path: str) -> Dict[str, Any]:
                 "code": "HIGH_MDD_CAUTION",
                 "severity": "CAUTION",
                 "message": f"Max drawdown reached {mdd:.2f}%.",
-                "source": "loss_analysis",
+                "source": "paper_performance",
                 "actual": mdd,
                 "threshold": 3.0
             })
             
+        # Consecutive Loss Check
         if cons_loss >= 5:
             risk_items.append({
                 "code": "CONSECUTIVE_LOSS_SEVERE",
                 "severity": "BLOCK_NEW_ENTRY",
                 "message": f"Consecutive losses reached {cons_loss}.",
-                "source": "loss_analysis",
+                "source": "paper_performance",
                 "actual": cons_loss,
                 "threshold": 5
             })
@@ -176,9 +182,29 @@ def run_ddm_status(config_path: str, output_path: str) -> Dict[str, Any]:
                 "code": "CONSECUTIVE_LOSS_CAUTION",
                 "severity": "CAUTION",
                 "message": f"Consecutive losses reached {cons_loss}.",
-                "source": "loss_analysis",
+                "source": "paper_performance",
                 "actual": cons_loss,
                 "threshold": 3
+            })
+
+        # Total PnL Pct Check
+        if total_pnl_pct <= -5.0:
+            risk_items.append({
+                "code": "TOTAL_PNL_CRASH_SEVERE",
+                "severity": "BLOCK_NEW_ENTRY",
+                "message": f"Total PnL dropped to {total_pnl_pct:.2f}%.",
+                "source": "paper_performance",
+                "actual": total_pnl_pct,
+                "threshold": -5.0
+            })
+        elif total_pnl_pct <= -3.0:
+            risk_items.append({
+                "code": "TOTAL_PNL_CRASH_CAUTION",
+                "severity": "CAUTION",
+                "message": f"Total PnL dropped to {total_pnl_pct:.2f}%.",
+                "source": "paper_performance",
+                "actual": total_pnl_pct,
+                "threshold": -3.0
             })
 
     # 3.8. Low Volume Ratio
