@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict
 
 from coinb.config_loader import load_config
+from coinb.ddm import run_ddm_status
 from coinb.jsonl import append_jsonl, ensure_parent
 from coinb.learning_log import build_learning_dataset
 from coinb.microstructure import build_microstructure_report
@@ -48,6 +49,7 @@ class PaperEngine:
             self._run_learning()
             self._run_loss_analysis()
             self._run_review()
+            self._run_ddm()
             self._cleanup_logs()
             
             self.last_error = ""
@@ -139,6 +141,13 @@ class PaperEngine:
         build_paper_review(
             loss_analysis_path="reports/orderflow_loss_analysis.json",
             output_path="reports/paper_review_latest.txt",
+        )
+
+    def _run_ddm(self):
+        self.last_success_step = "ddm-update"
+        run_ddm_status(
+            config_path=self.config_path,
+            output_path="reports/ddm_status.json",
         )
 
     def _cleanup_logs(self):
