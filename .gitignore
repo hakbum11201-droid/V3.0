@@ -17,15 +17,17 @@ env/
 .DS_Store
 Thumbs.db
 
-# Runtime outputs
-logs/*.jsonl
-reports/*.json
-runtime/*.json
+# Runtime outputs (Entire folders for safety)
+logs/
+reports/
+runtime/
+data/
 
-# Keep folder placeholders
+# Keep folder placeholders (If needed)
 !logs/.gitkeep
 !reports/.gitkeep
 !runtime/.gitkeep
+!data/.gitkeep
 
 # Local secrets / keys
 .env
@@ -34,6 +36,13 @@ runtime/*.json
 *.pem
 secrets/
 config/secrets.json
+secrets.json
+credentials.json
+
+# EXCEPTIONS for example files (MUST be after .env.*)
+!.env.example
+!.env.account.example
+!.env.live.example
 
 # Temporary files
 *.tmp
