@@ -33,29 +33,49 @@ def load_jsonl(filepath, max_lines=100):
 config = load_json("config/config.json")
 micro = load_json("reports/microstructure_snapshot.json")
 loss_analysis = load_json("reports/orderflow_loss_analysis.json")
-state = load_json("runtime/orderflow_paper_state.json")
 paper_review = load_text("reports/paper_review_latest.txt")
 config_candidates = load_text("reports/orderflow_config_candidates.txt")
 decisions = load_jsonl("logs/orderflow_paper_decisions.jsonl", 100)
 trades = load_jsonl("logs/orderflow_paper_trades.jsonl", 100)
 
-app_cfg = config.get("app", {})
-live_cfg = config.get("live", {})
-mode = app_cfg.get("default_mode", "paper")
-live_enabled = live_cfg.get("enabled", False)
-
-last_updated = state.get("last_updated", time.time())
-last_updated_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(last_updated))
+heartbeat = load_json("runtime/heartbeat.json")
+engine_status = load_json("runtime/engine_status.json")
+storage_status = load_json("reports/storage_status.json")
 
 st.title("coinB PRO V3.1 Dashboard")
 
 # 1. 상단 상태바
-st.header("1. System Status")
+st.header("1. System & Engine Status")
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Mode", mode)
-col2.metric("Live Enabled", str(live_enabled))
-col3.metric("Last Updated", last_updated_str)
-col4.metric("System State", "RUNNING")
+col1.metric("Mode", heartbeat.get("mode", "paper"))
+col2.metric("Live Enabled", str(heartbeat.get("live_enabled", False)))
+col3.metric("Last WS Event Count", heartbeat.get("last_ws_event_count", 0))
+col4.metric("Loop Count", heartbeat.get("loop_count", 0))
+
+col5, col6, col7, col8 = st.columns(4)
+col5.metric("Engine Running", str(heartbeat.get("running", False)))
+col6.metric("Engine Status", engine_status.get("status", "UNKNOWN"))
+col7.metric("Last Success Step", engine_status.get("last_success_step", "None"))
+if heartbeat.get("last_update"):
+    last_updated_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(heartbeat["last_update"]))
+else:
+    last_updated_str = "N/A"
+col8.metric("Last Update", last_updated_str)
+
+if heartbeat.get("last_error"):
+    st.error(f"Last Error: {heartbeat['last_error']}")
+
+# Storage Status
+with st.expander("Storage Status", expanded=False):
+    if storage_status:
+        scol1, scol2, scol3, scol4 = st.columns(4)
+        scol1.metric("WS Raw Size (MB)", storage_status.get("ws_raw_size_mb", 0))
+        scol2.metric("Total Logs Size (MB)", storage_status.get("total_logs_size_mb", 0))
+        scol3.metric("Retained Raw Files", storage_status.get("retained_raw_files", 0))
+        scol4.metric("Compressed Files", storage_status.get("compressed_files", 0))
+        st.json(storage_status)
+    else:
+        st.info("Storage status not available yet.")
 
 # 2. DDM 영역
 st.header("2. DDM (Drawdown Defense Manager)")

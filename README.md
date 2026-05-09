@@ -95,20 +95,28 @@ python -m coinb.main paper-config-candidates --decisions logs/orderflow_paper_de
 
 ---
 
-## 5. UI Dashboard (로컬 관제 시스템)
+## 5. Background Paper Engine & UI Dashboard
 
-V3.1부터 제공되는 개인용 로컬 관제 UI(Streamlit)는 다음 스크립트로 실행합니다.
-웹 브라우저를 통해 마켓 보드, 최근 판단 로그, 리포트 요약을 시각적으로 확인할 수 있습니다.
+V3.1부터 제공되는 개인용 로컬 관제 UI(Streamlit)와 백그라운드 Paper Engine은 다음 스크립트로 실행/종료합니다.
 
+**실행:**
 ```
 RUN_COINB_ALL.bat
 ```
-또는 PowerShell 환경에서:
-```powershell
-$env:PYTHONPATH = "$PWD\src"
-streamlit run src/coinb/ui_dashboard.py
+이 스크립트는 백그라운드로 `paper_engine`을 실행하고 브라우저로 Streamlit UI를 엽니다.  
+엔진은 실시간 데이터를 자동 수집하고 판단/리포트를 갱신합니다.  
+UI 접속 주소: `http://localhost:8501`
+
+**종료:**
 ```
-접속 주소: `http://localhost:8501`
+STOP_COINB_ALL.bat
+```
+이 스크립트는 실행 중인 Paper Engine과 Streamlit 프로세스를 안전하게 종료합니다.
+
+### 로그 보관 정책
+Paper Engine은 디스크 공간을 관리하기 위해 아래와 같이 로테이션을 수행합니다.
+- `logs/ws_raw/`의 원본 데이터: 최근 6시간은 원본 보관, 24시간 이전 데이터는 압축 후 자동 삭제.
+- 분석용 핵심 지표: `logs/microstructure_samples.jsonl` 및 판단/학습/손실 로그는 삭제하지 않고 유지됩니다.
 
 ---
 
