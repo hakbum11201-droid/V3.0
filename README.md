@@ -9,6 +9,7 @@
 2. **손실 방어 우선:** DDM(Drawdown Defense Manager)을 통한 리스크 감지 및 신규 진입 자동 차단.
 3. **데이터 중심 검증:** 업비트 WebSocket 기반 주문흐름(Orderflow) 미시구조 분석을 통해 수수료/슬리피지 차감 후에도 기대값이 남는(Net Edge) 거래만 선별합니다.
 4. **단계적 실거래:** Conservative -> Moderate 실험으로 최적의 기준을 찾고, tiny_live(소액 실거래) 모드를 거쳐 실제 자산 운용에 투입합니다.
+5. **성과 지향:** 수익률보다 원금 방어를 우선하며, 연환산 **net_pnl 5%** 이상의 실질적 가치 창출을 목표로 합니다.
 
 ## 현재 프로젝트 상태 (V3.1 Foundation)
 - **데이터:** Upbit 공개 WebSocket 실시간 수집 및 Microstructure 특징 추출.
