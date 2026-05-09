@@ -172,12 +172,13 @@ def run_opportunity_diagnostics(ws_path, config_path, output_json, output_txt):
             if not cur_ob: continue
             
             # Calc features
+            buy_10s = sum(_trade_price(tr) * _trade_volume(tr) for tr in w_trades_10s if _trade_side(tr) == "BID")
+            sell_10s = sum(_trade_price(tr) * _trade_volume(tr) for tr in w_trades_10s if _trade_side(tr) == "ASK")
             buy_3s = sum(_trade_price(tr) * _trade_volume(tr) for tr in w_trades_3s if _trade_side(tr) == "BID")
             sell_3s = sum(_trade_price(tr) * _trade_volume(tr) for tr in w_trades_3s if _trade_side(tr) == "ASK")
             buy_1s = sum(_trade_price(tr) * _trade_volume(tr) for tr in w_trades_1s if _trade_side(tr) == "BID")
             
             # Price changes
-            last_p = _trade_price(trades[-1]) if trades else 0
             def get_p_at(target_t):
                 for tr in reversed(trades):
                     if _to_float(tr.get("received_at")) <= target_t: return _trade_price(tr)
@@ -186,9 +187,11 @@ def run_opportunity_diagnostics(ws_path, config_path, output_json, output_txt):
             p_now = get_p_at(t)
             p_1s = get_p_at(t - 1)
             p_3s = get_p_at(t - 3)
+            p_10s = get_p_at(t - 10)
             
             change_1s = _pct_change(p_now, p_1s)
             change_3s = _pct_change(p_now, p_3s)
+            change_10s = _pct_change(p_now, p_10s)
             
             bid_5, ask_5 = _depth_krw(cur_ob, 5)
             bid, ask = _best_bid_ask(cur_ob)
@@ -218,16 +221,26 @@ def run_opportunity_diagnostics(ws_path, config_path, output_json, output_txt):
             if all_pass: market_all_pass += 1
             
             samples.append({
-                "t": t,
-                "all_pass": all_pass,
-                "buy_3s": round(buy_3s, 2),
-                "spread": round(spread, 4),
-                "ratio_5": round(ratio_5, 4),
+                "market": market,
+                "timestamp": t,
+                "buy_trade_value_3s": round(buy_3s, 2),
+                "buy_trade_value_10s": round(buy_10s, 2),
+                "sell_trade_value_3s": round(sell_3s, 2),
+                "sell_trade_value_10s": round(sell_10s, 2),
+                "spread_pct": round(spread, 4),
+                "bid_ask_depth_ratio_5": round(ratio_5, 4),
+                "price_change_1s_pct": round(change_1s, 6),
+                "price_change_3s_pct": round(change_3s, 6),
+                "price_change_10s_pct": round(change_10s, 6),
                 "ofi_score": round(ofi, 2),
                 "sweep_score": round(sweep, 2),
                 "absorption_score": round(abs_score, 2),
                 "continuation_score": round(cont, 2),
-                "price_change_3s_pct": round(change_3s, 4)
+                "volume_pass": v_pass,
+                "spread_pass": s_pass,
+                "imbalance_pass": i_pass,
+                "orderflow_score_pass": o_pass,
+                "all_pass": all_pass
             })
 
         sample_count = len(samples)
@@ -237,7 +250,7 @@ def run_opportunity_diagnostics(ws_path, config_path, output_json, output_txt):
                 "all_pass_count": market_all_pass,
                 "all_pass_rate": (market_all_pass / sample_count) * 100,
                 "gate_rates": {k: (v / sample_count) * 100 for k, v in market_gate_stats.items()},
-                "samples": samples # Include samples for market-specific diagnostics
+                "samples": samples 
             }
             total_samples += sample_count
             total_all_pass += market_all_pass

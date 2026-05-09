@@ -44,6 +44,7 @@ def main() -> None:
             "volume-threshold-diagnostics",
             "opportunity-diagnostics",
             "orderflow-score-diagnostics",
+            "score-component-diagnostics",
         ],
         help="실행할 명령",
     )
@@ -386,6 +387,17 @@ def main() -> None:
         result = run_orderflow_score_diagnostics(
             snapshot_path=args.snapshot,
             opportunity_path=args.opportunity,
+            config_path=args.config,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "score-component-diagnostics":
+        from .score_component_diagnostics import run_score_component_diagnostics
+        
+        result = run_score_component_diagnostics(
+            opportunity_path=args.opportunity,
+            ws_path=args.ws,
             config_path=args.config,
             output_json=args.output_json,
             output_txt=args.output_txt,
