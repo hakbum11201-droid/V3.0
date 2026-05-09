@@ -45,6 +45,7 @@ def main() -> None:
             "opportunity-diagnostics",
             "orderflow-score-diagnostics",
             "score-component-diagnostics",
+            "soft-score-backtest",
         ],
         help="실행할 명령",
     )
@@ -210,6 +211,12 @@ def main() -> None:
         "--opportunity",
         default="reports/opportunity_diagnostics.json",
         help="orderflow-score-diagnostics 용 opportunity diagnostics 경로",
+    )
+
+    parser.add_argument(
+        "--candidate",
+        default="configs/experiments/soft_score_candidate_v1.json",
+        help="soft-score-backtest 용 가중치 설정 경로",
     )
 
     args = parser.parse_args()
@@ -399,6 +406,16 @@ def main() -> None:
             opportunity_path=args.opportunity,
             ws_path=args.ws,
             config_path=args.config,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "soft-score-backtest":
+        from .soft_score_backtest import run_soft_score_backtest
+        
+        result = run_soft_score_backtest(
+            opportunity_path=args.opportunity,
+            candidate_path=args.candidate,
             output_json=args.output_json,
             output_txt=args.output_txt,
         )
