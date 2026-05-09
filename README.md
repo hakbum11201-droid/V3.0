@@ -160,6 +160,7 @@ START_COINB.bat     Windows 메뉴 실행기
 - **기본 실행:** 이 시스템은 기본적으로 API Key가 없는 **Keyless Paper Mode**로 작동합니다.
 - **키 저장:** 실제 API Key는 로컬 환경의 `.env`, `.env.account`, `.env.live` 파일에만 저장하며, 절대 GitHub에 업로드하지 않습니다.
 - **공개 저장소:** GitHub에는 오직 `.env.*.example` 파일만 업로드됩니다.
+- **비밀 정보 검사:** 커밋 전 `CHECK_SECRET_GUARD.bat` 실행을 권장합니다. 이 도구는 `.env` 파일, API Key, Authorization 토큰의 유출 여부를 검사하며 실제 키가 감지되면 커밋을 차단해야 합니다.
 - **접근 제어:** 보안을 위해 외부 접속, 포트포워딩, DMZ 사용을 금지하며 localhost 전용 UI 사용을 원칙으로 합니다.
 - **상세 정책:** 자세한 내용은 [SECURITY_KEY_POLICY_KR.md](docs/SECURITY_KEY_POLICY_KR.md)를 참고하세요.
 
