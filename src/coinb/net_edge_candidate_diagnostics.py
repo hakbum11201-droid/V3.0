@@ -55,9 +55,12 @@ def run_net_edge_candidate_diagnostics(opportunity_path, backtest_path, net_edge
     except Exception as e:
         return {"ok": False, "reason": f"Failed to load data: {e}"}
 
-    candidates = bt_data.get("top_candidates", [])
+    # Use all results
+    all_results = bt_data.get("all_results", [])
+    candidates = [r for r in all_results if r.get("total_score", 0) >= 60]
+    
     if not candidates:
-        return {"ok": False, "reason": "No candidates found in backtest data"}
+        return {"ok": False, "reason": "No candidates found (score >= 60)"}
 
     diag_results = []
     windows = [5, 10, 15, 30, 60]
@@ -68,7 +71,6 @@ def run_net_edge_candidate_diagnostics(opportunity_path, backtest_path, net_edge
         score = cand.get("total_score", 0)
         if not m or not t_entry or m not in history: continue
         
-        # Find entry price index
         entry_idx = -1
         p_entry = 0
         for i, (t, p) in enumerate(history[m]):
@@ -114,42 +116,30 @@ def run_net_edge_candidate_diagnostics(opportunity_path, backtest_path, net_edge
             
         diag_results.append(cand_diag)
 
-    # Aggregates
-    summary = {}
-    for w in windows:
-        mfes = [r["windows"][w]["mfe"] for r in diag_results]
-        maes = [r["windows"][w]["mae"] for r in diag_results]
-        finals = [r["windows"][w]["final"] for r in diag_results]
-        
-        summary[f"{w}s"] = {
-            "mfe": calculate_percentiles(mfes),
-            "mae": calculate_percentiles(maes),
-            "final": calculate_percentiles(finals),
-            "pass_counts": {
-                "020": sum(1 for r in diag_results if r["windows"][w]["pass_020"]),
-                "025": sum(1 for r in diag_results if r["windows"][w]["pass_025"]),
-                "030": sum(1 for r in diag_results if r["windows"][w]["pass_030"])
+    # Multi-threshold aggregates
+    thresh_diag = {}
+    for thresh in [60, 70, 80]:
+        t_cands = [r for r in diag_results if r["score"] >= thresh]
+        w_summary = {}
+        for w in windows:
+            mfes = [r["windows"][w]["mfe"] for r in t_cands]
+            w_summary[f"{w}s"] = {
+                "count": len(t_cands),
+                "mfe": calculate_percentiles(mfes),
+                "pass_counts": {
+                    "020": sum(1 for r in t_cands if r["windows"][w]["pass_020"]),
+                    "025": sum(1 for r in t_cands if r["windows"][w]["pass_025"]),
+                    "030": sum(1 for r in t_cands if r["windows"][w]["pass_030"])
+                }
             }
-        }
-
-    # Score vs MFE relationship
-    # Group by score 70-80 and 80+
-    score_groups = {"70-80": [], "80+": []}
-    for r in diag_results:
-        mfe_30s = r["windows"][30]["mfe"]
-        if r["score"] >= 80: score_groups["80+"].append(mfe_30s)
-        elif r["score"] >= 70: score_groups["70-80"].append(mfe_30s)
+        thresh_diag[str(thresh)] = w_summary
 
     report = {
         "ok": True,
         "generated_at": datetime.now().isoformat(),
-        "candidate_count": len(diag_results),
-        "window_summary": summary,
-        "score_correlation": {
-            "70-80_mfe_avg": (sum(score_groups["70-80"]) / len(score_groups["70-80"])) if score_groups["70-80"] else 0,
-            "80+_mfe_avg": (sum(score_groups["80+"]) / len(score_groups["80+"])) if score_groups["80+"] else 0
-        },
-        "details": diag_results
+        "total_analyzed": len(diag_results),
+        "threshold_diagnostics": thresh_diag,
+        "top_20_sample": diag_results[:20]
     }
 
     os.makedirs(os.path.dirname(output_json), exist_ok=True)
@@ -158,34 +148,23 @@ def run_net_edge_candidate_diagnostics(opportunity_path, backtest_path, net_edge
 
     os.makedirs(os.path.dirname(output_txt), exist_ok=True)
     with open(output_txt, "w", encoding="utf-8") as f:
-        f.write("=== Net Edge 후보 상세 진단 리포트 (MFE/MAE 분석) ===\n")
-        f.write(f"분석 일시: {report['generated_at']}\n")
-        f.write(f"분석 대상 후보 수: {len(diag_results)}개\n\n")
+        f.write("=== Net Edge Candidate Diagnostics (All Candidates) ===\n")
+        f.write(f"Generated At: {report['generated_at']}\n")
+        f.write(f"Total Candidates Analyzed: {len(diag_results)}개\n\n")
         
-        f.write("--- [보유 시간별 MFE 분포 (Gross 상승폭)] ---\n")
-        for w in windows:
-            s = summary[f"{w}s"]["mfe"]
-            pc = summary[f"{w}s"]["pass_counts"]
-            f.write(f"[{w}초 보유]\n")
-            f.write(f"  - 평균 MFE: {s['mean']:.4f}% / P90: {s['p90']:.4f}% / MAX: {s['max']:.4f}%\n")
-            f.write(f"  - 비용 기준 통과 수: 0.20%({pc['020']}회), 0.25%({pc['025']}회), 0.30%({pc['030']}회)\n")
-        
-        f.write("\n--- [점수와 MFE의 관계] ---\n")
-        f.write(f"- Score 70~80 후보 평균 MFE (30s): {report['score_correlation']['70-80_mfe_avg']:.4f}%\n")
-        f.write(f"- Score 80 이상 후보 평균 MFE (30s): {report['score_correlation']['80+_mfe_avg']:.4f}%\n\n")
-        
-        f.write("--- [진단 결론] ---\n")
-        total_020 = sum(summary[f"{w}s"]["pass_counts"]["020"] for w in windows)
-        if total_020 > 0:
-            f.write("1. 일부 후보에서 0.20% 이상의 상승(MFE)이 관찰됨. 비용을 극복할 가능성이 있는 구간이 존재함.\n")
-        else:
-            f.write("1. 모든 후보에서 MFE가 0.20%에 미달함. 현재 가중치와 진입 기준으로는 수수료를 이기기 어려움.\n")
+        for thresh in [60, 70, 80]:
+            f.write(f"--- [Threshold {thresh} Diagnostics] ---\n")
+            stats = thresh_diag[str(thresh)]
+            f.write(f"Count: {stats['30s']['count']}개\n")
+            for w in [30, 60]:
+                s = stats[f"{w}s"]
+                f.write(f"  {w}s MFE: Avg {s['mfe']['mean']:.4f}%, P90 {s['mfe']['p90']:.4f}%, Max {s['mfe']['max']:.4f}%\n")
+                f.write(f"  {w}s Pass: 0.20%({s['pass_counts']['020']}회), 0.25%({s['pass_counts']['025']}회), 0.30%({s['pass_counts']['030']}회)\n")
+            f.write("\n")
             
-        f.write("2. Soft Score v1을 그대로 반영하기에는 '순수익(Net Edge)' 확보 능력이 부족함.\n")
-        f.write("3. 다음 실험 방향: Threshold를 80 이상으로 상향하거나, Sweep/Cont 가중치를 높여 변동성이 큰 구간만 선별해야 함.\n")
-        
-        f.write("\n4. [주의] 본 시뮬레이션 결과는 config에 자동 반영되지 않습니다.\n")
-        f.write("5. 실거래 반영 전, 실제 시장 상황에서의 추가적인 Paper 실험이 반드시 필요합니다.\n")
+        f.write("--- [Note] ---\n")
+        f.write("1. Analysis includes ALL candidates matching thresholds.\n")
+        f.write("2. [CAUTION] Settings are for analysis and not auto-applied.\n")
 
     return report
 

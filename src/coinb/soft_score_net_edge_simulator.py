@@ -19,7 +19,6 @@ def run_soft_score_net_edge_sim(opportunity_path, backtest_path, candidate_path,
         with open(backtest_path, "r", encoding="utf-8") as f:
             bt_data = json.load(f)
         
-        # Load WS for price history
         history = defaultdict(list)
         with open(ws_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -34,18 +33,14 @@ def run_soft_score_net_edge_sim(opportunity_path, backtest_path, candidate_path,
                             history[m].append((t, p))
                 except: continue
         
-        # Sort history
         for m in history:
             history[m].sort(key=lambda x: x[0])
 
     except Exception as e:
         return {"ok": False, "reason": f"Failed to load data: {e}"}
 
-    # Fee from config (mocking config load)
-    fee_rate = 0.0005 # Default fallback
-    slippage_rate = 0.0005 # 0.05%
-    
-    # Try to load fee from config/config.json if possible
+    fee_rate = 0.0005 
+    slippage_rate = 0.0005 
     try:
         with open("config/config.json", "r", encoding="utf-8") as f:
             cfg = json.load(f)
@@ -53,55 +48,59 @@ def run_soft_score_net_edge_sim(opportunity_path, backtest_path, candidate_path,
             slippage_rate = cfg.get("risk", {}).get("slippage_pct", 0.05) / 100.0
     except: pass
 
-    candidates = [c for c in bt_data.get("top_candidates", []) if c.get("is_candidate")]
-    # Also get candidates from all_results if top_candidates is too small
-    # But for now let's assume we can find them.
-    # Actually, the backtest tool I wrote only returned Top 20. I should have returned more.
-    # I'll check if the JSON has all_results? No, I didn't save all_results in JSON.
-    
-    # Let's re-calculate candidates if needed, but the user says "Soft Score threshold 70 이상 후보만".
-    # I'll look at the markets key in bt_data if it has samples? No.
-    
-    # I'll have to re-simulate candidates if I don't have enough in JSON.
-    # But I'll follow the user's requirement to use backtest JSON.
+    # Analyze ALL candidates from all_results
+    all_results = bt_data.get("all_results", [])
+    candidates = [r for r in all_results if r.get("total_score", 0) >= 60]
     
     sim_results = []
+    missing_future_price_count = 0
+    valid_future_price_count = 0
+    total_tick_count = 0
     
     for cand in candidates:
         m = cand.get("market")
         t_entry = cand.get("ts")
+        score = cand.get("total_score", 0)
         if not m or not t_entry or m not in history: continue
         
-        # Find entry price
         p_entry = 0
-        for t, p in history[m]:
+        entry_idx = -1
+        for i, (t, p) in enumerate(history[m]):
             if t >= t_entry:
                 p_entry = p
+                entry_idx = i
                 break
-        if p_entry == 0: continue
+        if p_entry == 0:
+            missing_future_price_count += 1
+            continue
         
-        windows = [5, 10, 15, 30]
+        windows = [5, 10, 15, 30, 60]
         p_exits = {}
         for w in windows:
             t_target = t_entry + w
             p_exit = 0
-            for t, p in history[m]:
+            ticks_found = 0
+            for i in range(entry_idx, len(history[m])):
+                t, p = history[m][i]
                 if t >= t_target:
                     p_exit = p
+                    ticks_found = i - entry_idx
                     break
-            if p_exit == 0: p_exit = history[m][-1][1] # Last available
-            p_exits[w] = p_exit
+            if p_exit == 0: 
+                p_exit = history[m][-1][1]
+                ticks_found = len(history[m]) - 1 - entry_idx
             
-        # Costs
-        # Spread cost estimate: find spread from opportunity if possible
-        # Or just use a fixed 0.05% as estimate if not found
+            p_exits[w] = p_exit
+            total_tick_count += ticks_found
+
+        valid_future_price_count += 1
         spread_cost_pct = 0.05 
-        
         costs_total_pct = (fee_rate * 2 * 100) + (spread_cost_pct) + (slippage_rate * 100)
         
         cand_perf = {
             "market": m,
             "ts": t_entry,
+            "score": score,
             "p_entry": p_entry,
             "costs_pct": costs_total_pct,
             "windows": {}
@@ -118,30 +117,30 @@ def run_soft_score_net_edge_sim(opportunity_path, backtest_path, candidate_path,
         
         sim_results.append(cand_perf)
 
-    # Aggregates
-    summary = {}
-    windows = [5, 10, 15, 30]
-    for w in windows:
-        nets = [r["windows"][w]["net"] for r in sim_results]
-        wins = [r["windows"][w]["win"] for r in sim_results]
-        summary[f"{w}s"] = {
-            "win_rate": (sum(wins) / len(wins) * 100) if wins else 0,
-            "avg_net_pnl": (sum(nets) / len(nets)) if nets else 0,
-            "max_gain": max(nets) if nets else 0,
-            "max_loss": min(nets) if nets else 0
-        }
+    # Threshold comparison logic
+    thresh_summary = {}
+    for thresh in [60, 70, 80]:
+        t_cands = [r for r in sim_results if r["score"] >= thresh]
+        w_stats = {}
+        for w in [5, 10, 15, 30, 60]:
+            nets = [r["windows"][w]["net"] for r in t_cands]
+            wins = [r["windows"][w]["win"] for r in t_cands]
+            w_stats[f"{w}s"] = {
+                "count": len(t_cands),
+                "win_rate": (sum(wins) / len(wins) * 100) if wins else 0,
+                "avg_net_pnl": (sum(nets) / len(nets)) if nets else 0
+            }
+        thresh_summary[str(thresh)] = w_stats
 
     report = {
         "ok": True,
         "generated_at": datetime.now().isoformat(),
-        "candidate_count": len(sim_results),
-        "costs": {
-            "fee_rate": fee_rate,
-            "slippage_rate": slippage_rate,
-            "spread_estimate_pct": 0.05
-        },
-        "summary": summary,
-        "details": sim_results
+        "total_candidates_analyzed": len(sim_results),
+        "missing_future_price_count": missing_future_price_count,
+        "valid_future_price_count": valid_future_price_count,
+        "avg_future_tick_count": (total_tick_count / (valid_future_price_count * 5)) if valid_future_price_count > 0 else 0,
+        "threshold_comparison": thresh_summary,
+        "top_20_sample": sim_results[:20]
     }
 
     os.makedirs(os.path.dirname(output_json), exist_ok=True)
@@ -150,37 +149,25 @@ def run_soft_score_net_edge_sim(opportunity_path, backtest_path, candidate_path,
 
     os.makedirs(os.path.dirname(output_txt), exist_ok=True)
     with open(output_txt, "w", encoding="utf-8") as f:
-        f.write("=== Soft Score Net Edge 시뮬레이션 결과 ===\n")
-        f.write(f"분석 일시: {report['generated_at']}\n")
-        f.write(f"분석 대상 후보 수: {len(sim_results)}개\n\n")
+        f.write("=== Soft Score Net Edge Simulation Report (All Candidates) ===\n")
+        f.write(f"Generated At: {report['generated_at']}\n")
+        f.write(f"Total Candidates (>= 60): {len(sim_results)}개\n")
+        f.write(f"Valid Candidates Analyzed: {valid_future_price_count}개\n")
+        f.write(f"Missing Future Price: {missing_future_price_count}개\n\n")
         
-        f.write("--- [보유 시간별 Net PnL (수수료/비용 차감 후)] ---\n")
-        for w in windows:
-            s = summary[f"{w}s"]
-            f.write(f"[{w}초 보유]\n")
-            f.write(f"  - 승률: {s['win_rate']:.2f}%\n")
-            f.write(f"  - 평균 Net PnL: {s['avg_net_pnl']:.4f}%\n")
-            f.write(f"  - Max Gain: {s['max_gain']:.4f}% / Max Loss: {s['max_loss']:.4f}%\n")
-        
-        f.write("\n--- [비용 분석] ---\n")
-        f.write(f"- 수수료 (왕복): {(fee_rate*2*100):.3f}%\n")
-        f.write(f"- 예상 슬리피지: {(slippage_rate*100):.3f}%\n")
-        f.write(f"- 예상 스프레드 비용: 0.050%\n")
-        f.write(f"- 총 차감 비용 (Total Edge Drag): {report['costs']['fee_rate']*2*100 + report['costs']['slippage_rate']*100 + 0.05:.3f}%\n\n")
-        
-        best_w = sorted(windows, key=lambda w: summary[f"{w}s"]["avg_net_pnl"], reverse=True)[0]
-        f.write(f"가장 유리한 보유 시간: {best_w}초 (평균 {summary[f'{best_w}s']['avg_net_pnl']:.4f}%)\n\n")
-        
-        f.write("--- [진단 결론] ---\n")
-        if summary[f"{best_w}s"]["avg_net_pnl"] > 0:
-            f.write(f"1. Soft Score v1 후보들은 {best_w}초 보유 시 비용 차감 후에도 양(+)의 기댓값을 가짐.\n")
-            f.write("2. 이는 실제 전략에 Soft Score 구조를 도입할 가치가 충분함을 시사함.\n")
-        else:
-            f.write("1. 비용 차감 후 모든 보유 시간에서 기댓값이 음(-)으로 나타남.\n")
-            f.write("2. 가중치 조정 또는 진입 임계값(Threshold) 상향이 필요함.\n")
+        for thresh in [60, 70, 80]:
+            f.write(f"--- [Threshold {thresh} Stats] ---\n")
+            stats = thresh_summary[str(thresh)]
+            f.write(f"Candidate Count: {stats['5s']['count']}개\n")
+            for w in [5, 10, 15, 30, 60]:
+                s = stats[f"{w}s"]
+                f.write(f"  {w}s: WinRate {s['win_rate']:.2f}%, AvgNetPnL {s['avg_net_pnl']:.4f}%\n")
+            f.write("\n")
             
-        f.write("\n3. [주의] 본 시뮬레이션 결과는 config에 자동 반영되지 않습니다.\n")
-        f.write("4. orderflow_paper.py 반영 전, 실제 시장 상황에서의 추가적인 Paper 실험이 반드시 필요합니다.\n")
+        f.write("--- [Note] ---\n")
+        f.write("1. Statistics above are based on ALL candidates matching each threshold.\n")
+        f.write("2. The Top 20 samples in JSON are for reference only.\n")
+        f.write("3. [CAUTION] Config is not automatically updated.\n")
 
     return report
 

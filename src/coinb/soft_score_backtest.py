@@ -128,7 +128,8 @@ def run_soft_score_backtest(opportunity_path, candidate_path, output_json, outpu
         "score_distribution": score_dist,
         "threshold_comparison": threshold_counts,
         "markets": dict(market_stats),
-        "top_candidates": top_candidates
+        "top_candidates": top_candidates,
+        "all_results": all_results
     }
 
     os.makedirs(os.path.dirname(output_json), exist_ok=True)
