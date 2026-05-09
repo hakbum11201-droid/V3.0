@@ -46,6 +46,7 @@ def main() -> None:
             "orderflow-score-diagnostics",
             "score-component-diagnostics",
             "soft-score-backtest",
+            "soft-score-net-edge-sim",
         ],
         help="실행할 명령",
     )
@@ -217,6 +218,12 @@ def main() -> None:
         "--candidate",
         default="configs/experiments/soft_score_candidate_v1.json",
         help="soft-score-backtest 용 가중치 설정 경로",
+    )
+
+    parser.add_argument(
+        "--backtest",
+        default="reports/soft_score_backtest.json",
+        help="soft-score-net-edge-sim 용 backtest 결과 경로",
     )
 
     args = parser.parse_args()
@@ -416,6 +423,18 @@ def main() -> None:
         result = run_soft_score_backtest(
             opportunity_path=args.opportunity,
             candidate_path=args.candidate,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "soft-score-net-edge-sim":
+        from .soft_score_net_edge_simulator import run_soft_score_net_edge_sim
+        
+        result = run_soft_score_net_edge_sim(
+            opportunity_path=args.opportunity,
+            backtest_path=args.backtest,
+            candidate_path=args.candidate,
+            ws_path=args.ws,
             output_json=args.output_json,
             output_txt=args.output_txt,
         )
