@@ -81,9 +81,44 @@ with st.expander("Storage Status", expanded=False):
 st.header("2. DDM (Drawdown Defense Manager)")
 if os.path.exists("reports/ddm_status.json"):
     ddm = load_json("reports/ddm_status.json")
-    st.json(ddm)
+    status = ddm.get("status", "UNKNOWN")
+    
+    # Status display with color coding
+    if status == "NORMAL":
+        st.success(f"DDM Status: {status} (정상)")
+    elif status == "CAUTION":
+        st.warning(f"DDM Status: {status} (주의)")
+    elif status == "BLOCK_NEW_ENTRY":
+        st.error(f"DDM Status: {status} (신규 진입 차단 권고)")
+    elif status == "DATA_ERROR":
+        st.error(f"DDM Status: {status} (데이터 오류)")
+    else:
+        st.info(f"DDM Status: {status}")
+
+    col_ddm1, col_ddm2, col_ddm3 = st.columns(3)
+    col_ddm1.metric("Risk Level", ddm.get("risk_level", 0))
+    col_ddm2.metric("Block New Entry", str(ddm.get("should_block_new_entry", False)))
+    
+    gen_at = ddm.get("generated_at", 0)
+    gen_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(gen_at)) if gen_at else "N/A"
+    col_ddm3.write(f"**Generated At:** {gen_at_str}")
+
+    st.write(f"**Summary:** {ddm.get('summary', 'No summary available.')}")
+
+    # Risk Items
+    risk_items = ddm.get("risk_items", [])
+    if risk_items:
+        st.subheader("Risk Items")
+        st.dataframe(pd.DataFrame(risk_items), use_container_width=True)
+
+    # Recommendations
+    recs = ddm.get("recommendations", [])
+    if recs:
+        st.subheader("Recommendations")
+        for rec in recs:
+            st.markdown(f"- {rec}")
 else:
-    st.warning("Not implemented yet")
+    st.warning("DDM not generated yet")
 
 # 3. 마켓 보드
 st.header("3. Market Board")
