@@ -1,0 +1,28 @@
+{
+  "name": "soft_score_candidate_v1",
+  "mode": "paper_experiment_only",
+  "hard_blocks": [
+    "DDM_DATA_ERROR",
+    "DDM_BLOCK_NEW_ENTRY",
+    "MARKET_WARNING",
+    "SPREAD_EXCEEDS_TARGET_PROFIT",
+    "INSUFFICIENT_EXIT_LIQUIDITY",
+    "BTC_CRASH",
+    "DATA_STALE",
+    "DAILY_LOSS_LIMIT",
+    "MDD_LIMIT",
+    "CONSECUTIVE_LOSS_LIMIT"
+  ],
+  "weights": {
+    "volume_score": 25,
+    "spread_score": 20,
+    "imbalance_score": 20,
+    "absorption_score": 20,
+    "continuation_score": 10,
+    "sweep_score": 5
+  },
+  "entry_threshold": 70,
+  "requires_net_edge_positive": true,
+  "requires_ddm_normal": true,
+  "auto_apply": false
+}
