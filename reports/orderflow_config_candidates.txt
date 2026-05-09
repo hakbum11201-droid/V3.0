@@ -1,0 +1,28 @@
+==================================================
+ PAPER CONFIG CANDIDATES SUMMARY
+==================================================
+
+RISK NOTE: 실제 승률/손익 검증 전이므로 config 자동 반영 금지
+
+[LOW_VOLUME]
+  - Target Config: microstructure.min_trade_value_3s
+  - Note: LOW_VOLUME 거절이 많아 min_trade_value_3s 하향 제안
+  - Conservative: 24000000.0000
+  - Moderate    : 15000000.0000
+  - Aggressive  : 6000000.0000
+
+[SPREAD_TOO_WIDE]
+  - Target Config: microstructure.max_spread_pct
+  - Note: SPREAD_TOO_WIDE 거절이 많음 (특히 KRW-SOL 마켓). 기준 상향 또는 해당 마켓 제외 제안
+  - Conservative: 0.1320
+  - Moderate    : 0.1560
+  - Aggressive  : 0.1800
+
+[LOW_IMBALANCE]
+  - Target Config: microstructure.bid_ask_depth_ratio_min
+  - Note: LOW_IMBALANCE 거절이 많아 bid_ask_depth_ratio_min 하향 제안
+  - Conservative: 0.9450
+  - Moderate    : 0.7350
+  - Aggressive  : 0.5250
+
+==================================================

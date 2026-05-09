@@ -87,6 +87,9 @@ python -m coinb.main microstructure --micro-input logs/upbit_ws_events.jsonl --m
 python -m coinb.main orderflow-paper --config config/config.json --micro-output reports/microstructure_snapshot.json --paper-state runtime/orderflow_paper_state.json --paper-decisions logs/orderflow_paper_decisions.jsonl --paper-trades logs/orderflow_paper_trades.jsonl
 python -m coinb.main learning-log --paper-decisions logs/orderflow_paper_decisions.jsonl --paper-trades logs/orderflow_paper_trades.jsonl --learning-output logs/orderflow_learning_dataset.jsonl --learning-summary reports/orderflow_learning_summary.json
 python -m coinb.main loss-analysis --paper-decisions logs/orderflow_paper_decisions.jsonl --paper-trades logs/orderflow_paper_trades.jsonl --loss-output reports/orderflow_loss_analysis.json
+
+# 3) Config 조정을 위한 추천(후보) 요약 생성
+python -m coinb.main paper-config-candidates --decisions logs/orderflow_paper_decisions.jsonl --loss-analysis reports/orderflow_loss_analysis.json --output-json reports/orderflow_config_candidates.json --output-txt reports/orderflow_config_candidates.txt
 ```
 위 과정을 통해 `logs/` 디렉토리에 판단 기록(`orderflow_paper_decisions.jsonl`), 거래 기록(`orderflow_paper_trades.jsonl`), 학습용 데이터셋(`orderflow_learning_dataset.jsonl`)이 누적 생성됩니다.
 

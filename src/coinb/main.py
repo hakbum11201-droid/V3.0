@@ -34,6 +34,7 @@ def main() -> None:
             "learning-log",
             "loss-analysis",
             "paper-review",
+            "paper-config-candidates",
         ],
         help="실행할 명령",
     )
@@ -115,6 +116,30 @@ def main() -> None:
         "--review-output",
         default="reports/paper_review_latest.txt",
         help="Paper 리뷰 자동 요약 저장 경로",
+    )
+
+    parser.add_argument(
+        "--decisions",
+        default="logs/orderflow_paper_decisions.jsonl",
+        help="paper_config_candidates 용 decisions 파일 경로",
+    )
+
+    parser.add_argument(
+        "--loss-analysis",
+        default="reports/orderflow_loss_analysis.json",
+        help="paper_config_candidates 용 loss analysis 파일 경로",
+    )
+
+    parser.add_argument(
+        "--output-json",
+        default="reports/orderflow_config_candidates.json",
+        help="paper_config_candidates json 출력 경로",
+    )
+
+    parser.add_argument(
+        "--output-txt",
+        default="reports/orderflow_config_candidates.txt",
+        help="paper_config_candidates txt 출력 경로",
     )
 
     args = parser.parse_args()
@@ -213,6 +238,16 @@ def main() -> None:
         result = build_paper_review(
             loss_analysis_path=args.loss_output,
             output_path=args.review_output,
+        )
+
+    elif args.command == "paper-config-candidates":
+        from .paper_config_candidates import build_paper_config_candidates
+
+        result = build_paper_config_candidates(
+            decisions_path=args.decisions,
+            loss_analysis_path=args.loss_analysis,
+            output_json_path=args.output_json,
+            output_txt_path=args.output_txt,
         )
 
     else:
