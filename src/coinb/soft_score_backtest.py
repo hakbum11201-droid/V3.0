@@ -110,6 +110,21 @@ def run_soft_score_backtest(opportunity_path, candidate_path, output_json, outpu
                     "a": round(a_score, 4),
                     "c": round(c_score, 4),
                     "sw": round(sw_score, 4)
+                },
+                "raw": {
+                    "buy_trade_value_3s": s.get("buy_trade_value_3s"),
+                    "buy_trade_value_10s": s.get("buy_trade_value_10s"),
+                    "sell_trade_value_3s": s.get("sell_trade_value_3s"),
+                    "sell_trade_value_10s": s.get("sell_trade_value_10s"),
+                    "spread_pct": s.get("spread_pct"),
+                    "bid_ask_depth_ratio_5": s.get("bid_ask_depth_ratio_5"),
+                    "price_change_1s_pct": s.get("price_change_1s_pct"),
+                    "price_change_3s_pct": s.get("price_change_3s_pct"),
+                    "price_change_10s_pct": s.get("price_change_10s_pct"),
+                    "ofi_score": s.get("ofi_score"),
+                    "sweep_score": s.get("sweep_score"),
+                    "absorption_score": s.get("absorption_score"),
+                    "continuation_score": s.get("continuation_score")
                 }
             })
 

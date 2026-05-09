@@ -48,6 +48,7 @@ def main() -> None:
             "soft-score-backtest",
             "soft-score-net-edge-sim",
             "net-edge-candidate-diagnostics",
+            "net-edge-winner-profile",
         ],
         help="실행할 명령",
     )
@@ -231,6 +232,12 @@ def main() -> None:
         "--net-edge-sim",
         default="reports/soft_score_net_edge_sim.json",
         help="net-edge-candidate-diagnostics 용 simulator 결과 경로",
+    )
+
+    parser.add_argument(
+        "--net-edge-diagnostics",
+        default="reports/net_edge_candidate_diagnostics.json",
+        help="net-edge-winner-profile 용 진단 결과 경로",
     )
 
     args = parser.parse_args()
@@ -454,6 +461,17 @@ def main() -> None:
             backtest_path=args.backtest,
             net_edge_path=args.net_edge_sim,
             ws_path=args.ws,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "net-edge-winner-profile":
+        from .net_edge_winner_profile import run_net_edge_winner_profile
+        
+        result = run_net_edge_winner_profile(
+            opportunity_path=args.opportunity,
+            backtest_path=args.backtest,
+            net_edge_diag_path=args.net_edge_diagnostics,
             output_json=args.output_json,
             output_txt=args.output_txt,
         )

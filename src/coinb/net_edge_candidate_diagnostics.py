@@ -139,7 +139,8 @@ def run_net_edge_candidate_diagnostics(opportunity_path, backtest_path, net_edge
         "generated_at": datetime.now().isoformat(),
         "total_analyzed": len(diag_results),
         "threshold_diagnostics": thresh_diag,
-        "top_20_sample": diag_results[:20]
+        "top_20_sample": diag_results[:20],
+        "details": diag_results
     }
 
     os.makedirs(os.path.dirname(output_json), exist_ok=True)
