@@ -37,6 +37,7 @@ def main() -> None:
             "loss-analysis",
             "paper-review",
             "paper-config-candidates",
+            "ddm-status",
         ],
         help="실행할 명령",
     )
@@ -142,6 +143,12 @@ def main() -> None:
         "--output-txt",
         default="reports/orderflow_config_candidates.txt",
         help="paper_config_candidates txt 출력 경로",
+    )
+
+    parser.add_argument(
+        "--ddm-output",
+        default="reports/ddm_status.json",
+        help="DDM 상태 저장 경로",
     )
 
     args = parser.parse_args()
@@ -250,6 +257,14 @@ def main() -> None:
             loss_analysis_path=args.loss_analysis,
             output_json_path=args.output_json,
             output_txt_path=args.output_txt,
+        )
+
+    elif args.command == "ddm-status":
+        from .ddm import run_ddm_status
+
+        result = run_ddm_status(
+            config_path=args.config,
+            output_path=args.ddm_output,
         )
 
     else:
