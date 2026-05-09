@@ -42,6 +42,7 @@ def main() -> None:
             "rejection-diagnostics",
             "build-config-experiments",
             "volume-threshold-diagnostics",
+            "opportunity-diagnostics",
         ],
         help="실행할 명령",
     )
@@ -352,6 +353,16 @@ def main() -> None:
         
         result = run_diagnostics(
             ws_path=args.ws,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "opportunity-diagnostics":
+        from .opportunity_diagnostics import run_opportunity_diagnostics
+        
+        result = run_opportunity_diagnostics(
+            ws_path=args.ws,
+            config_path=args.config,
             output_json=args.output_json,
             output_txt=args.output_txt,
         )
