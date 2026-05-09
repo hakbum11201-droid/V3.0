@@ -3,11 +3,20 @@
 ## 1. 비전 및 최종 목표
 - **비전:** 단순 프로토타입을 넘어, 개인이 실제로 장기간 운영하며 수익을 창출할 수 있는 전문 급 자동매매 시스템 구축.
 - **최종 목표:** 1인 개인이 로컬 환경에서 직접 운영하는 업비트 KRW 마켓 최적화 자동매매 솔루션.
-- **핵심 가치:** 
-  1. **안전 제일:** DDM(Drawdown Defense Manager)과 MDD 관리를 통한 원금 방어 최우선.
-  2. **철저한 검증:** 실거래 전 최소 1주일 이상의 Paper Trading 검증 필수.
-  3. **데이터 중심:** Microstructure 분석과 Orderflow 기반의 정밀한 진입/청산.
-  4. **단계적 전환:** tiny_live(소액 실거래)를 통한 시장 충격 및 체결 오차 검증 후 정규 실거래 전환.
+- **핵심 가치 및 원칙:** 
+  1. **주문흐름 스캘핑(Orderflow Scalping):** 후행성 차트 지표가 아닌, 업비트 WebSocket 기반의 실시간 체결/호가 데이터 흐름을 최우선으로 판단한다.
+  2. **수수료 차감 후 기대값(Net Edge):** 모든 성과는 수수료, 스프레드, 슬리피지를 차감한 순이익(Net PnL) 기준으로만 판단한다. "수수료 전 수익"은 고려하지 않는다.
+  3. **안전 제일(DDM):** DDM(Drawdown Defense Manager)과 MDD 관리를 통한 원금 방어 및 신규 진입 차단 최우선.
+  4. **철저한 검증:** 실거래 전 최소 1주일 이상의 Paper Trading 검증 필수.
+  5. **현실적 실험:** 거래 횟수를 늘리는 것이 목표가 아니라, 수수료를 제외하고도 수익이 남는 '유효한 기준'을 찾는 실험(Conservative -> Moderate -> Aggressive)을 진행한다.
+  6. **단계적 전환:** tiny_live(소액 실거래)를 통한 시장 충격 및 체결 오차 검증 후 정규 실거래 전환.
+
+## 2. 주문흐름 스캘핑(Orderflow Scalping) 구조
+1. **Regime Filter:** BTC 급락, 시장 약세, 데이터 오류 시 신규 진입 금지.
+2. **Liquidity / Spread Gate:** 스프레드가 넓거나 호가 깊이가 부족하면 진입 금지.
+3. **Orderflow Entry:** 매수 체결대금 증가, OFI(Order Flow Imbalance) 양호, 호가벽 흡수, Sweep 후 가격 유지, Continuation 점수 확인.
+4. **Short Holding Exit:** 짧은 익절/손절, `max_holding_seconds` 기반 강제 종료를 통한 빠른 회전.
+5. **DDM Gate:** MDD, 연속 손실, BTC 급락, 데이터 오류 시 신규 진입 차단.
 
 ## 2. 현재 상태 (V3.1 Foundation 완료)
 - [x] Upbit 공개 WebSocket 데이터 수집 및 Microstructure 계산

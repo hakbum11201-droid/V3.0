@@ -13,6 +13,9 @@ python -m unittest discover -s tests -p "test_*.py"
 python -m coinb.main validate-config --config config/config.json
 ```
 - **제한:** `live.enabled=false` 및 `default_mode=paper` 설정은 별도 승인 전까지 변경을 엄격히 금지한다.
+- **전략 방향:** 후행성 차트 지표가 아닌, 업비트 WebSocket 실시간 체결/호가 기반의 **주문흐름 스캘핑(Orderflow Scalping)** 시스템 구축을 최우선으로 한다.
+- **Net Edge 원칙:** 모든 거래 성과는 수수료, 스프레드, 슬리피지를 차감한 **순이익(Net PnL)** 기준으로 판단하며, 기대값이 확실한 거래만 선별한다.
+- **실험 원칙:** 거래 횟수를 늘리기 위해 무리하게 조건을 완화하지 않으며, Conservative -> Moderate 순서의 실험을 통해 시장 현실에 맞는 최적의 기준점을 찾는다.
 
 ## UI 및 DDM 개발 원칙 (V3.1+)
 

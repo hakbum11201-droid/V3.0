@@ -14,6 +14,8 @@ coinB PRO v3.1.2 (UI & DDM Foundation 완료)
 - **Streamlit UI(한국어) 및 백그라운드 paper_engine 구동 확인**
 - **DDM(Drawdown Defense Manager) 상태 계산 및 UI 시각화 완료**
 - **DDM Gate를 통한 Paper 신규 진입 차단 기능 연동 완료**
+- **수수료 차감 후 기대값(Net Edge) 원칙 수립:** 모든 판단은 수수료/스프레드/슬리피지 차감 후 기준.
+- **Conservative 실험 완료:** 판단 180회 중 거래 1회 발생. (LOW_VOLUME 80.56%로 매우 보수적 상태)
 
 ## 실행 파일
 

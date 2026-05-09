@@ -27,6 +27,7 @@ ATR 기반 손절/익절/트레일링 및 체결 비용 모델 반영.
 
 ## v3.1
 개인용 관제 UI, DDM(Drawdown Defense Manager) 및 리스크 차단 게이트 연동.
+**핵심 전략:** 업비트 WebSocket 기반 주문흐름 스캘핑(Orderflow Scalping) 체계 정립.
 - [x] Phase 1: Streamlit 기반 UI Foundation (한국어)
 - [x] Phase 2: DDM Foundation
 - [x] Phase 3: DDM Paper Gate (위험 시 신규 진입 자동 차단)

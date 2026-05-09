@@ -101,8 +101,10 @@
   - paper 상태 기반 PnL 계산, equity curve/MDD 계산 및 UI 표시
 - **Phase 5: Account Snapshot**
   - 실제 Upbit 잔고 조회 전용 기능 연결 (.env, 조회 권한 전용 Key만 사용)
-- **Phase 6: Long Paper Verification**
-  - 1일/3일/7일 단위 장기 paper 검증 운영 및 비교 리포트 생성
+- **Phase 6: Realistic Experimentation (Conservative -> Moderate -> Aggressive)**
+  - **Conservative 결과:** 판단 180회, 거래 1회, LOW_VOLUME 약 80.56%. (너무 보수적임)
+  - **Moderate 목표:** 거래 횟수를 늘리는 것이 아니라, 수수료 차감 후 기대값이 남는 현실적인 거래량 기준점 검토.
+  - 1일/3일/7일 단위 장기 paper 검증 운영 및 비교 리포트 생성.
 
 ## 8. 안전 원칙
 - 실거래는 별도 승인 전까지 철저히 금지 (`live.enabled=false` 유지)
