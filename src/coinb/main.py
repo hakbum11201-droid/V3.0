@@ -40,6 +40,7 @@ def main() -> None:
             "ddm-status",
             "paper-performance",
             "rejection-diagnostics",
+            "build-config-experiments",
         ],
         help="실행할 명령",
     )
@@ -169,6 +170,24 @@ def main() -> None:
         "--summary-output",
         default="reports/paper_performance_summary.txt",
         help="paper-performance summary txt 저장 경로",
+    )
+
+    parser.add_argument(
+        "--base-config",
+        default="config/config.json",
+        help="build-config-experiments 용 원본 설정 파일",
+    )
+
+    parser.add_argument(
+        "--diagnostics",
+        default="reports/rejection_diagnostics.json",
+        help="build-config-experiments 용 진단 데이터",
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        default="configs/experiments",
+        help="build-config-experiments 용 출력 디렉토리",
     )
 
     args = parser.parse_args()
@@ -310,6 +329,15 @@ def main() -> None:
             decisions_path=args.decisions,
             output_json_path=args.output_json,
             output_txt_path=args.output_txt,
+        )
+
+    elif args.command == "build-config-experiments":
+        from .config_experiment_builder import run_config_experiment_builder
+
+        result = run_config_experiment_builder(
+            base_config=args.base_config,
+            diagnostics=args.diagnostics,
+            output_dir=args.output_dir,
         )
 
     else:
