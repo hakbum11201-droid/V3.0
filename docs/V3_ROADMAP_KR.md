@@ -23,5 +23,14 @@ ATR 기반 손절/익절/트레일링 및 체결 비용 모델 반영.
 
 ## v3.0
 운영형 연구 프레임워크 완성: 백테스트, 리포트, 튜너, 손실 차단, 레짐 필터, 테스트 포함.
+(주의: v3.0은 실거래 자동주문 완성본이 아니라 실거래 전 검증용 운영 프레임워크다.)
 
-주의: v3.0은 실거래 자동주문 완성본이 아니라 실거래 전 검증용 운영 프레임워크다.
+## v3.1 (Next Phase)
+개인용 관제 UI, DDM(Drawdown Defense Manager) 및 계좌 추적 연동.
+- Phase 1: Streamlit 기반 UI Foundation
+- Phase 2: DDM Foundation
+- Phase 3: DDM Paper Gate (위험 시 신규 진입 차단)
+- Phase 4: Paper PnL & Drawdown 추적
+- Phase 5: Account Snapshot (조회 전용 실계좌 연동)
+- Phase 6: Long Paper Verification (장기 Paper 운영)
+자세한 내용은 `V3_UI_DDM_ROADMAP_KR.md` 참조.

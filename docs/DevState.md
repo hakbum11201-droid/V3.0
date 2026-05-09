@@ -2,21 +2,20 @@
 
 ## 현재 버전
 
-coinB PRO v3.0.1
+coinB PRO v3.0.1 (Paper/Research Framework 완료)
 
 ## 기준선 상태 (확인 완료)
 
-- python -m compileall src tests → 통과 (25개 파일, 오류 없음)
+- python -m compileall src tests → 통과
 - python -m unittest discover -s tests -p "test_*.py" → Ran 40 tests OK
 - python -m coinb.main validate-config → ok=true, mode=paper, live.enabled=false
-- regime.py 이중 중복 코드 제거 완료
-- 모든 .py 파일 LF 정규화 완료
-- 모든 .bat 파일 CRLF 정규화 완료
-- __pycache__ / .pyc 제거 완료
+- paper-review, paper-config-candidates 및 loss-analysis 연동 완료
+- 모든 리포트 및 터미널 출력 UTF-8 정규화(한글 깨짐 해결) 완료
 
 ## 실행 파일
 
-- START_COINB.bat : Windows 메뉴 실행기 (검증/paper/tuner 포함)
+- START_COINB.bat : Windows 메뉴 실행기
+- RUN_PAPER_LOOP_1H.bat : 1시간 Paper Loop 검증기
 - PowerShell 검증 명령:
   $env:PYTHONPATH = "$PWD\src"
   python -m compileall src tests
@@ -32,4 +31,5 @@ coinB PRO v3.0.1
 
 ## 다음 단계
 
-v3.1: 실전형 가상매매 엔진 고도화 (승인 후 별도 브랜치)
+v3.1: 개인용 관제 UI(Streamlit) + DDM(Drawdown Defense Manager) 및 계좌 추적 연동
+- 세부 로드맵: `docs/V3_UI_DDM_ROADMAP_KR.md` 참조

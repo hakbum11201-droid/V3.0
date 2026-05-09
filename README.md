@@ -95,6 +95,13 @@ python -m coinb.main paper-config-candidates --decisions logs/orderflow_paper_de
 
 ---
 
+## Next Phase: UI + DDM Roadmap
+
+다음 개발 단계인 개인용 관제 UI, DDM(Drawdown Defense Manager) 및 계좌/성과 추적 계획은 아래 문서에서 확인할 수 있습니다.
+- [docs/V3_UI_DDM_ROADMAP_KR.md](docs/V3_UI_DDM_ROADMAP_KR.md)
+
+---
+
 ## Project Structure
 
 ```
