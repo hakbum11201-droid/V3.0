@@ -2,26 +2,21 @@
 
 ## 작업 원칙
 
-- 기본 모드는 paper/backtest입니다.
-- 실거래 주문 코드는 v3.x에 추가하지 않습니다.
-- 한 번에 하나의 기능만 수정합니다.
-- 기존 파일명과 함수명을 확인한 뒤 수정합니다.
-- 작업 전후 검증은 아래 명령으로 수행합니다 (PowerShell 기준):
-
+- **목표:** 단순 프로토타입이 아닌, 1인 개인이 실사용 가능한 장기 운영 자동매매 시스템 구축.
+- **모드 관리:** 기본 모드는 `paper`이며, 실거래 전환은 철저한 검증(tiny_live) 후에만 진행한다.
+- **코드 무결성:** 한 번에 하나의 기능만 수정하며, 기존 파일명과 함수명은 함부로 변경하지 않는다.
+- **안전 검증:** 작업 전후 아래 명령으로 시스템 상태를 상시 검증한다.
 ```powershell
 $env:PYTHONPATH = "$PWD\src"
 python -m compileall src tests
 python -m unittest discover -s tests -p "test_*.py"
 python -m coinb.main validate-config --config config/config.json
 ```
+- **제한:** `live.enabled=false` 및 `default_mode=paper` 설정은 별도 승인 전까지 변경을 엄격히 금지한다.
 
-- START_COINB.bat [1] Basic Check 로도 동일하게 검증할 수 있습니다.
-- 자동 튜너는 코드를 수정하지 않고 설정 후보만 생성합니다.
-- live.enabled=false 및 default_mode=paper는 변경 금지입니다.
+## UI 및 DDM 개발 원칙 (V3.1+)
 
-## 향후 UI 및 DDM 개발 원칙 (v3.1)
-
-- UI는 Streamlit 기반의 로컬 관제용(개인용)으로만 구축합니다.
-- UI에서 실거래 기능을 켜거나 활성화하는 버튼은 만들지 않습니다.
-- DDM(Drawdown Defense Manager)은 "손실 방어 및 신규 진입 차단"을 최우선 목표로 하며 청산 로직은 차단하지 않습니다.
-- 실제 계좌 조회 기능 연동 시, 주문 권한이 없는 '조회 전용' API Key만 사용하며 .env 파일로 격리합니다.
+- **UI 언어:** 대시보드 및 리포트 요약 등 사용자가 보는 UI는 한국어를 기본으로 한다. (내부 데이터 구조는 영어 유지)
+- **DDM 우선:** DDM(Drawdown Defense Manager)은 손실 방어 및 신규 진입 차단을 최우선 목표로 하며, 위험 감지 시 `should_block_new_entry`를 통해 시스템을 보호한다.
+- **보안:** 실제 계좌 연동 시 자산 조회 전용(Read-Only) API Key만 사용하며, `.env` 파일로 철저히 격리한다. 주문 권한이 있는 Key는 별도의 실거래 단계(tiny_live) 진입 시에만 제한적으로 사용한다.
+- **수동 개입:** 설정값(Config)은 시스템이 제안한 후보를 사람이 직접 검토한 후 수동으로 반영하는 것을 원칙으로 한다.

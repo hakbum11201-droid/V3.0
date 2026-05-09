@@ -1,9 +1,21 @@
-# coinB PRO v3.0.1
+# coinB PRO v3.1
 
-Upbit KRW market orderflow-based paper trading framework.
+업비트 KRW 마켓 주문흐름(Orderflow) 기반 개인용 자동매매 관제 시스템.
 
-This project is a **paper trading / research system**.  
-Live trading is intentionally disabled. `live.enabled = false` is enforced in code.
+이 프로젝트는 단순 프로토타입을 넘어, **1인 개인이 실제로 운영 가능한 업비트 실거래 자동매매 시스템** 구축을 최종 목표로 합니다. 현재는 **Paper Trading 기반의 연구 및 검증 단계**에 있으며, 철저한 안전 장치와 검증 절차를 거친 후 단계별 실거래 전환을 추진합니다.
+
+## 핵심 목표
+1. **전문가급 관제:** 개인용 로컬 대시보드(Streamlit)를 통한 실시간 시장 및 시스템 모니터링.
+2. **손실 방어 우선:** DDM(Drawdown Defense Manager)을 통한 리스크 감지 및 신규 진입 자동 차단.
+3. **데이터 중심 검증:** Orderflow 미시구조 분석과 Paper Trading을 통한 장기 수익성 검증.
+4. **단계적 실거래:** tiny_live(소액 실거래) 모드를 거쳐 검증된 전략만 실제 자산 운용에 투입.
+
+## 현재 프로젝트 상태 (V3.1 Foundation)
+- **데이터:** Upbit 공개 WebSocket 실시간 수집 및 Microstructure 특징 추출.
+- **엔진:** 백그라운드 `paper_engine`을 통한 자동 판단, 학습 로그, 손실 분석 수행.
+- **UI:** 한국어 기반 Streamlit 대시보드로 시스템 상태 및 DDM 리스크 실시간 시각화.
+- **안전:** DDM Gate를 통한 Paper 신규 진입 차단 연동 완료.
+- **제한:** 현재 `live.enabled = false` 및 `default_mode = paper`가 엄격히 적용 중입니다.
 
 ---
 

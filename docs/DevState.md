@@ -2,7 +2,7 @@
 
 ## 현재 버전
 
-coinB PRO v3.0.1 (Paper/Research Framework 완료)
+coinB PRO v3.1.2 (UI & DDM Foundation 완료)
 
 ## 기준선 상태 (확인 완료)
 
@@ -11,6 +11,9 @@ coinB PRO v3.0.1 (Paper/Research Framework 완료)
 - python -m coinb.main validate-config → ok=true, mode=paper, live.enabled=false
 - paper-review, paper-config-candidates 및 loss-analysis 연동 완료
 - 모든 리포트 및 터미널 출력 UTF-8 정규화(한글 깨짐 해결) 완료
+- **Streamlit UI(한국어) 및 백그라운드 paper_engine 구동 확인**
+- **DDM(Drawdown Defense Manager) 상태 계산 및 UI 시각화 완료**
+- **DDM Gate를 통한 Paper 신규 진입 차단 기능 연동 완료**
 
 ## 실행 파일
 

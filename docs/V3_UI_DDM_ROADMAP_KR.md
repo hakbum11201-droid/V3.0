@@ -1,27 +1,22 @@
 # V3 Next Phase: UI, DDM, Account Roadmap
 
 ## 1. 현재 상태 요약
-- V3.0은 paper/research framework 단계
-- 실데이터 기반 수집/분석/판단/리포트 흐름은 작동
-- `trade_count`가 아직 0인 상태이며, 수익성 검증 완료 단계가 아님
-- 다음 목표는 실거래가 아니라 관제/리스크/분석 UI 구축
+- V3.1 Foundation 완료 (UI, DDM Gate 연동)
+- 실데이터 기반 수집/분석/판단/리포트 및 리스크 차단 흐름 작동
+- 다음 목표: 성과 추적(PnL/MDD) 시각화 및 실계좌 조회 연동
 
 ## 2. 최종 목표
-- 개인용 준전문가급 자동매매 관제·검증 시스템
-- 실시간 마켓 보드
-- paper 판단 로그 시각화
-- DDM 리스크 차단
-- paper PnL/Drawdown 추적
-- 향후 실제 계좌 조회 연동
-- 실거래 전 장기 paper 검증 체계
+- **1인 개인용 업비트 자동매매 관제·검증 및 실거래 시스템**
+- 실시간 마켓 보드 및 정밀 미시구조 분석 시각화
+- Paper Trading 판단 로그 시각화 및 PnL/MDD 추적
+- DDM(Drawdown Defense Manager)을 통한 리스크 자동 차단
+- 장기 Paper 검증 후 단계적 실거래(tiny_live) 전환
 
-## 3. UI 기술 선택
-- **1차 UI는 Streamlit 사용**
-- **이유:**
-  - Python 프로젝트와 직접 연결 쉬움
-  - 빠른 개발 가능
-  - logs/reports/runtime 파일을 바로 읽을 수 있음
-  - 로컬 개인용 UI에 적합
+## 3. UI 기술 및 언어 원칙
+- **기술:** Streamlit 기반 로컬 대시보드
+- **언어:** 사용자가 접하는 모든 UI 및 리포트 요약은 **한국어**를 기본으로 함
+- **보안:** 로컬 환경 전용 UI로 외부 노출 최소화
+- **이유:** Python 연동성, 빠른 개발, 로컬 파일 직접 접근 가능
 - **실행 방식:**
   - `RUN_UI.bat`
   - `streamlit run src/coinb/ui_dashboard.py`
@@ -95,14 +90,13 @@
 - 조회 전용 모듈: `src/coinb/account_snapshot.py`, `reports/account_snapshot.json`
 
 ## 7. 개발 단계
-- **Phase 1: UI Foundation**
+- **[x] Phase 1: UI Foundation (한국어)**
   - Streamlit UI 생성 (`src/coinb/ui_dashboard.py`)
-  - `RUN_UI.bat` 생성, 기본 파일/로그 연동 및 마켓/최근 판단 보드 구축
-- **Phase 2: DDM Foundation**
-  - `src/coinb/ddm.py` 생성 (`reports/ddm_status.json`)
-  - UI에 DDM 상태 표시 (아직 차단 연동 X)
-- **Phase 3: DDM Paper Gate**
-  - DDM이 BLOCK_NEW_ENTRY일 때 orderflow-paper 신규 매수 차단 구현
+  - `RUN_COINB_ALL.bat` 등을 통한 자동 실행 및 리포트 시각화
+- **[x] Phase 2: DDM Foundation**
+  - `src/coinb/ddm.py` 생성 및 리스크 분석 엔진 구축
+- **[x] Phase 3: DDM Paper Gate**
+  - DDM 위험 감지 시 `orderflow-paper` 신규 진입 자동 차단 연동 완료
 - **Phase 4: Paper PnL & Drawdown**
   - paper 상태 기반 PnL 계산, equity curve/MDD 계산 및 UI 표시
 - **Phase 5: Account Snapshot**
