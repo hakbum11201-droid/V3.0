@@ -43,6 +43,7 @@ def main() -> None:
             "build-config-experiments",
             "volume-threshold-diagnostics",
             "opportunity-diagnostics",
+            "orderflow-score-diagnostics",
         ],
         help="실행할 명령",
     )
@@ -196,6 +197,18 @@ def main() -> None:
         "--ws",
         default="logs/upbit_ws_events.jsonl",
         help="volume-threshold-diagnostics 용 WebSocket 로그 경로",
+    )
+    
+    parser.add_argument(
+        "--snapshot",
+        default="reports/microstructure_snapshot.json",
+        help="orderflow-score-diagnostics 용 microstructure snapshot 경로",
+    )
+    
+    parser.add_argument(
+        "--opportunity",
+        default="reports/opportunity_diagnostics.json",
+        help="orderflow-score-diagnostics 용 opportunity diagnostics 경로",
     )
 
     args = parser.parse_args()
@@ -362,6 +375,17 @@ def main() -> None:
         
         result = run_opportunity_diagnostics(
             ws_path=args.ws,
+            config_path=args.config,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "orderflow-score-diagnostics":
+        from .orderflow_score_diagnostics import run_orderflow_score_diagnostics
+        
+        result = run_orderflow_score_diagnostics(
+            snapshot_path=args.snapshot,
+            opportunity_path=args.opportunity,
             config_path=args.config,
             output_json=args.output_json,
             output_txt=args.output_txt,

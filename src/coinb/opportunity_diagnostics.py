@@ -57,12 +57,43 @@ def _spread_pct(bid: float, ask: float) -> float:
 def _clamp(v, low, high):
     return max(low, min(high, v))
 
-# Simplified score calculators for diagnostics
-def estimate_ofi_score(imbalance_3s, buy_value_3s, ratio_5):
+def _pct_change(current: float, previous: float) -> float:
+    if previous <= 0: return 0.0
+    return ((current - previous) / previous) * 100.0
+
+# Formula logic from microstructure.py
+def calc_ofi_score(imbalance_3s, buy_value_3s, ratio_5, sell_value_3s):
     score = 0.0
     score += _clamp((imbalance_3s - 1.0) * 30.0, 0.0, 45.0)
     score += _clamp(buy_value_3s / 10_000_000.0 * 10.0, 0.0, 30.0)
     score += _clamp((ratio_5 - 1.0) * 20.0, 0.0, 25.0)
+    if sell_value_3s > buy_value_3s: score *= 0.65
+    return _clamp(score, 0.0, 100.0)
+
+def calc_sweep_score(p1s, p3s, buy1s, buy3s, spread):
+    score = 0.0
+    score += _clamp(p1s * 25.0, 0.0, 25.0)
+    score += _clamp(p3s * 15.0, 0.0, 25.0)
+    score += _clamp(buy1s / 5_000_000.0 * 15.0, 0.0, 20.0)
+    score += _clamp(buy3s / 20_000_000.0 * 15.0, 0.0, 20.0)
+    if spread > 0.25: score *= 0.7
+    return _clamp(score, 0.0, 100.0)
+
+def calc_absorption_score(sell3s, p3s, ratio5):
+    score = 0.0
+    score += _clamp(sell3s / 10_000_000.0 * 20.0, 0.0, 40.0)
+    if p3s >= -0.15: score += 25.0
+    score += _clamp((ratio5 - 1.0) * 15.0, 0.0, 15.0)
+    return _clamp(score, 0.0, 100.0)
+
+def calc_continuation_score(ofi, sweep, abs_score, p3s, spread):
+    score = 0.0
+    score += ofi * 0.35
+    score += sweep * 0.35
+    score += abs_score * 0.15
+    if p3s > 0: score += 10.0
+    if spread <= 0.15: score += 5.0
+    elif spread > 0.30: score -= 10.0
     return _clamp(score, 0.0, 100.0)
 
 def run_opportunity_diagnostics(ws_path, config_path, output_json, output_txt):
@@ -130,6 +161,7 @@ def run_opportunity_diagnostics(ws_path, config_path, output_json, output_txt):
             # Window data
             w_trades_10s = [tr for tr in trades if t - 10 <= _to_float(tr.get("received_at")) <= t]
             w_trades_3s = [tr for tr in w_trades_10s if t - 3 <= _to_float(tr.get("received_at")) <= t]
+            w_trades_1s = [tr for tr in w_trades_3s if t - 1 <= _to_float(tr.get("received_at")) <= t]
             
             # Latest orderbook at or before t
             cur_ob = None
@@ -142,6 +174,22 @@ def run_opportunity_diagnostics(ws_path, config_path, output_json, output_txt):
             # Calc features
             buy_3s = sum(_trade_price(tr) * _trade_volume(tr) for tr in w_trades_3s if _trade_side(tr) == "BID")
             sell_3s = sum(_trade_price(tr) * _trade_volume(tr) for tr in w_trades_3s if _trade_side(tr) == "ASK")
+            buy_1s = sum(_trade_price(tr) * _trade_volume(tr) for tr in w_trades_1s if _trade_side(tr) == "BID")
+            
+            # Price changes
+            last_p = _trade_price(trades[-1]) if trades else 0
+            def get_p_at(target_t):
+                for tr in reversed(trades):
+                    if _to_float(tr.get("received_at")) <= target_t: return _trade_price(tr)
+                return _trade_price(trades[0]) if trades else 0
+            
+            p_now = get_p_at(t)
+            p_1s = get_p_at(t - 1)
+            p_3s = get_p_at(t - 3)
+            
+            change_1s = _pct_change(p_now, p_1s)
+            change_3s = _pct_change(p_now, p_3s)
+            
             bid_5, ask_5 = _depth_krw(cur_ob, 5)
             bid, ask = _best_bid_ask(cur_ob)
             
@@ -149,9 +197,11 @@ def run_opportunity_diagnostics(ws_path, config_path, output_json, output_txt):
             ratio_5 = (bid_5 / ask_5) if ask_5 > 0 else (bid_5 if bid_5 > 0 else 0)
             imbalance_3s = (buy_3s / sell_3s) if sell_3s > 0 else (buy_3s if buy_3s > 0 else 0)
             
-            # Scores (Simplified)
-            ofi = estimate_ofi_score(imbalance_3s, buy_3s, ratio_5)
-            cont = ofi * 0.7 # Placeholder for complex logic, mostly OFI driven in diagnostics
+            # Scores (Full logic)
+            ofi = calc_ofi_score(imbalance_3s, buy_3s, ratio_5, sell_3s)
+            sweep = calc_sweep_score(change_1s, change_3s, buy_1s, buy_3s, spread)
+            abs_score = calc_absorption_score(sell_3s, change_3s, ratio_5)
+            cont = calc_continuation_score(ofi, sweep, abs_score, change_3s, spread)
             
             # Gates
             v_pass = buy_3s >= min_val_3s
@@ -170,10 +220,14 @@ def run_opportunity_diagnostics(ws_path, config_path, output_json, output_txt):
             samples.append({
                 "t": t,
                 "all_pass": all_pass,
-                "buy_3s": buy_3s,
-                "spread": spread,
-                "ratio_5": ratio_5,
-                "cont_score": cont
+                "buy_3s": round(buy_3s, 2),
+                "spread": round(spread, 4),
+                "ratio_5": round(ratio_5, 4),
+                "ofi_score": round(ofi, 2),
+                "sweep_score": round(sweep, 2),
+                "absorption_score": round(abs_score, 2),
+                "continuation_score": round(cont, 2),
+                "price_change_3s_pct": round(change_3s, 4)
             })
 
         sample_count = len(samples)
@@ -182,7 +236,8 @@ def run_opportunity_diagnostics(ws_path, config_path, output_json, output_txt):
                 "sample_count": sample_count,
                 "all_pass_count": market_all_pass,
                 "all_pass_rate": (market_all_pass / sample_count) * 100,
-                "gate_rates": {k: (v / sample_count) * 100 for k, v in market_gate_stats.items()}
+                "gate_rates": {k: (v / sample_count) * 100 for k, v in market_gate_stats.items()},
+                "samples": samples # Include samples for market-specific diagnostics
             }
             total_samples += sample_count
             total_all_pass += market_all_pass
@@ -241,13 +296,12 @@ def run_opportunity_diagnostics(ws_path, config_path, output_json, output_txt):
             
         f.write("\n--- 진단 결론 및 제언 ---\n")
         if total_all_pass > 0:
-            f.write(f"1. 30분간 총 {total_all_pass}회의 1초 단위 진입 기회가 있었으나, 30초 스냅샷 방식으로는 대부분 놓쳤을 가능성이 높음.\n")
+            f.write(f"1. 분석 기간 동안 총 {total_all_pass}회의 1초 단위 진입 기회가 발견됨.\n")
         else:
             f.write(f"1. 분석 기간 동안 모든 조건을 동시에 만족하는 기회가 1회도 없었음.\n")
             
-        f.write("2. 판단 주기를 30초에서 1~5초 내외로 단축하는 것이 거래 집행력 향상에 필수적임.\n")
+        f.write("2. 판단 주기를 단축하는 것이 거래 집행력 향상에 필수적임.\n")
         f.write("3. 특정 Gate 통과율이 극단적으로 낮다면 해당 임계값의 현실성 재검토 필요.\n")
-        f.write("4. 결론: 전략 로직 수정 이전에 '판단 주기(Interval)' 개선에 대한 기술적 검토 필요.\n")
 
     return global_report
 
