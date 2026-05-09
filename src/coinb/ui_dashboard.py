@@ -45,28 +45,28 @@ storage_status = load_json("reports/storage_status.json")
 st.title("coinB PRO V3.1 Dashboard")
 
 # 1. 상단 상태바
-st.header("1. System & Engine Status")
+st.header("1. 시스템 / 엔진 상태")
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Mode", heartbeat.get("mode", "paper"))
-col2.metric("Live Enabled", str(heartbeat.get("live_enabled", False)))
-col3.metric("Last WS Event Count", heartbeat.get("last_ws_event_count", 0))
-col4.metric("Loop Count", heartbeat.get("loop_count", 0))
+col1.metric("모드", heartbeat.get("mode", "paper"))
+col2.metric("실거래 활성화 여부", str(heartbeat.get("live_enabled", False)))
+col3.metric("최근 WS 이벤트 수", heartbeat.get("last_ws_event_count", 0))
+col4.metric("반복 횟수", heartbeat.get("loop_count", 0))
 
 col5, col6, col7, col8 = st.columns(4)
-col5.metric("Engine Running", str(heartbeat.get("running", False)))
-col6.metric("Engine Status", engine_status.get("status", "UNKNOWN"))
-col7.metric("Last Success Step", engine_status.get("last_success_step", "None"))
+col5.metric("엔진 실행 상태", str(heartbeat.get("running", False)))
+col6.metric("엔진 상태", engine_status.get("status", "UNKNOWN"))
+col7.metric("마지막 성공 단계", engine_status.get("last_success_step", "None"))
 if heartbeat.get("last_update"):
     last_updated_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(heartbeat["last_update"]))
 else:
     last_updated_str = "N/A"
-col8.metric("Last Update", last_updated_str)
+col8.metric("마지막 갱신 시간", last_updated_str)
 
 if heartbeat.get("last_error"):
     st.error(f"Last Error: {heartbeat['last_error']}")
 
 # Storage Status
-with st.expander("Storage Status", expanded=False):
+with st.expander("저장공간 상태", expanded=False):
     if storage_status:
         scol1, scol2, scol3, scol4 = st.columns(4)
         scol1.metric("WS Raw Size (MB)", storage_status.get("ws_raw_size_mb", 0))
@@ -77,46 +77,75 @@ with st.expander("Storage Status", expanded=False):
     else:
         st.info("Storage status not available yet.")
 
-# 2. DDM 영역
-st.header("2. DDM (Drawdown Defense Manager)")
+# 2. DDM 손실 방어 관리자
+st.header("2. DDM 손실 방어 관리자(Drawdown Defense Manager)")
 if os.path.exists("reports/ddm_status.json"):
     ddm = load_json("reports/ddm_status.json")
     status = ddm.get("status", "UNKNOWN")
     
     # Status display with color coding
     if status == "NORMAL":
-        st.success(f"DDM Status: {status} (정상)")
+        st.success(f"DDM 상태: 정상")
     elif status == "CAUTION":
-        st.warning(f"DDM Status: {status} (주의)")
+        st.warning(f"DDM 상태: 주의")
     elif status == "BLOCK_NEW_ENTRY":
-        st.error(f"DDM Status: {status} (신규 진입 차단 권고)")
+        st.error(f"DDM 상태: 신규 진입 차단 권고")
     elif status == "DATA_ERROR":
-        st.error(f"DDM Status: {status} (데이터 오류)")
+        st.error(f"DDM 상태: 데이터 오류")
     else:
-        st.info(f"DDM Status: {status}")
+        st.info(f"DDM 상태: {status}")
 
     col_ddm1, col_ddm2, col_ddm3 = st.columns(3)
-    col_ddm1.metric("Risk Level", ddm.get("risk_level", 0))
-    col_ddm2.metric("Block New Entry", str(ddm.get("should_block_new_entry", False)))
+    col_ddm1.metric("위험 단계", ddm.get("risk_level", 0))
+    col_ddm2.metric("신규 진입 차단 여부", str(ddm.get("should_block_new_entry", False)))
     
     gen_at = ddm.get("generated_at", 0)
     gen_at_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(gen_at)) if gen_at else "N/A"
-    col_ddm3.write(f"**Generated At:** {gen_at_str}")
+    col_ddm3.write(f"**생성 시간:** {gen_at_str}")
 
-    st.write(f"**Summary:** {ddm.get('summary', 'No summary available.')}")
+    summary_text = ddm.get('summary', '요약 정보가 없습니다.')
+    # Simple summary translation
+    if "System is operating normally" in summary_text:
+        summary_text = "시스템이 정상적으로 동작 중입니다."
+    elif "Caution advised" in summary_text:
+        summary_text = "일부 위험 요소로 인해 주의가 필요합니다."
+    elif "Should block new entry" in summary_text:
+        summary_text = "위험이 감지되어 신규 진입 차단을 권고합니다."
+    elif "System state unreliable" in summary_text:
+        summary_text = "데이터 또는 설정 오류가 감지되어 시스템 상태를 신뢰할 수 없습니다."
+        
+    st.write(f"**요약:** {summary_text}")
 
     # Risk Items
     risk_items = ddm.get("risk_items", [])
     if risk_items:
-        st.subheader("Risk Items")
-        st.dataframe(pd.DataFrame(risk_items), use_container_width=True)
+        st.subheader("위험 항목")
+        df_risk = pd.DataFrame(risk_items)
+        df_risk = df_risk.rename(columns={
+            "code": "코드",
+            "severity": "심각도",
+            "message": "내용",
+            "source": "출처",
+            "actual": "실제값",
+            "threshold": "기준값"
+        })
+        st.dataframe(df_risk, use_container_width=True)
 
     # Recommendations
     recs = ddm.get("recommendations", [])
     if recs:
-        st.subheader("Recommendations")
+        st.subheader("권장 조치")
         for rec in recs:
-            st.markdown(f"- {rec}")
+            rec_kr = rec
+            if "Review risk items" in rec:
+                rec_kr = "위험 항목을 검토하고 config 후보 조정을 검토하세요."
+            elif "Continue monitoring" in rec:
+                rec_kr = "계속 모니터링하세요."
+            elif "Stop new paper entries" in rec:
+                rec_kr = "새로운 페이퍼 진입을 중단하세요."
+            elif "Fix heartbeat/engine errors" in rec:
+                rec_kr = "heartbeat/엔진 오류를 해결하세요."
+            st.markdown(f"- {rec_kr}")
 else:
     st.warning("DDM not generated yet")
 

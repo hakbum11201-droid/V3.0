@@ -105,7 +105,7 @@ RUN_COINB_ALL.bat
 ```
 이 스크립트는 백그라운드로 `paper_engine`을 실행하고 브라우저로 Streamlit UI를 엽니다.  
 엔진은 실시간 데이터를 자동 수집하고 판단/리포트를 갱신합니다.  
-UI 접속 주소: `http://localhost:8501`
+UI 접속 주소: `http://localhost:8501` (UI는 한국어를 기본 언어로 제공합니다.)
 
 **종료:**
 ```
