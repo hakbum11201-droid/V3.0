@@ -11,6 +11,8 @@ from .tuner import run_tuner
 
 
 def _print_json(result: Dict[str, Any]) -> None:
+    import sys
+    sys.stdout.reconfigure(encoding='utf-8')
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
