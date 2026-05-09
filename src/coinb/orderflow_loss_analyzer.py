@@ -110,6 +110,7 @@ def build_reason_summary(decisions: List[Dict[str, Any]]) -> Dict[str, Dict[str,
                 "reason": reason,
                 "count": 0,
                 "markets": {},
+                "diagnostics_sample": [],
             }
 
         result[key]["count"] += 1
@@ -117,6 +118,10 @@ def build_reason_summary(decisions: List[Dict[str, Any]]) -> Dict[str, Dict[str,
         market = str(decision.get("market", "UNKNOWN"))
         markets = result[key]["markets"]
         markets[market] = int(markets.get(market, 0)) + 1
+
+        diagnostic = decision.get("diagnostic")
+        if diagnostic and len(result[key]["diagnostics_sample"]) < 5:
+            result[key]["diagnostics_sample"].append(diagnostic)
 
     return dict(sorted(result.items(), key=lambda item: item[1]["count"], reverse=True))
 

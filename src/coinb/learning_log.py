@@ -77,6 +77,7 @@ def build_decision_learning_row(decision: Dict[str, Any]) -> Dict[str, Any]:
         "expected_edge": _to_float(decision.get("expected_edge", 0.0)),
         "slippage_estimate": _to_float(decision.get("slippage_estimate", 0.0)),
         "virtual_fill_result": decision.get("virtual_fill_result", {}),
+        "diagnostic": decision.get("diagnostic", {}),
     }
 
     for key in FEATURE_KEYS:

@@ -21,6 +21,7 @@ class PaperDecision:
     expected_edge: float
     slippage_estimate: float
     virtual_fill_result: Dict[str, Any]
+    diagnostic: Dict[str, Any]
     details: Dict[str, Any]
 
     def to_dict(self) -> Dict[str, Any]:
@@ -255,13 +256,34 @@ def check_entry_condition(
         return make_decision(market, "NO_BUY", "RISK_BLOCKED:NO_CASH", score, price, features, {})
 
     if spread_pct > max_spread_pct:
-        return make_decision(market, "NO_BUY", "SPREAD_TOO_WIDE", score, price, features, {})
+        diag = {
+            "checked_field": "spread_pct",
+            "actual_value": round(spread_pct, 6),
+            "required_value": round(max_spread_pct, 6),
+            "gap": round(spread_pct - max_spread_pct, 6),
+            "gap_pct": round((spread_pct - max_spread_pct) / max_spread_pct * 100.0, 2) if max_spread_pct > 0 else 0.0
+        }
+        return make_decision(market, "NO_BUY", "SPREAD_TOO_WIDE", score, price, features, {"diagnostic": diag})
 
     if buy_trade_value_3s < min_trade_value_3s:
-        return make_decision(market, "NO_BUY", "LOW_VOLUME", score, price, features, {})
+        diag = {
+            "checked_field": "buy_trade_value_3s",
+            "actual_value": round(buy_trade_value_3s, 2),
+            "required_value": round(min_trade_value_3s, 2),
+            "gap": round(buy_trade_value_3s - min_trade_value_3s, 2),
+            "gap_pct": round((buy_trade_value_3s - min_trade_value_3s) / min_trade_value_3s * 100.0, 2) if min_trade_value_3s > 0 else 0.0
+        }
+        return make_decision(market, "NO_BUY", "LOW_VOLUME", score, price, features, {"diagnostic": diag})
 
     if depth_ratio < depth_ratio_min:
-        return make_decision(market, "NO_BUY", "LOW_IMBALANCE", score, price, features, {})
+        diag = {
+            "checked_field": "bid_ask_depth_ratio_5",
+            "actual_value": round(depth_ratio, 4),
+            "required_value": round(depth_ratio_min, 4),
+            "gap": round(depth_ratio - depth_ratio_min, 4),
+            "gap_pct": round((depth_ratio - depth_ratio_min) / depth_ratio_min * 100.0, 2) if depth_ratio_min > 0 else 0.0
+        }
+        return make_decision(market, "NO_BUY", "LOW_IMBALANCE", score, price, features, {"diagnostic": diag})
 
     continuation_ok = continuation_score >= continuation_min
     sweep_ok = ofi_score >= ofi_min and sweep_score >= sweep_min
@@ -599,7 +621,8 @@ def make_decision(
 
     details.update(extra)
 
-    fill_result = extra.get("fill", {})
+    fill_result = extra.pop("fill", {})
+    diagnostic = extra.pop("diagnostic", {})
 
     return PaperDecision(
         timestamp=time.time(),
@@ -611,5 +634,6 @@ def make_decision(
         expected_edge=float(features.get("continuation_score", 0.0)),
         slippage_estimate=abs(price - float(features.get("best_ask", price))) / price * 100 if price > 0 else 0.0,
         virtual_fill_result=fill_result,
+        diagnostic=diagnostic,
         details=details,
     )
