@@ -11,8 +11,7 @@ EXCLUDE_DIRS = {
     "logs",
     "reports",
     "runtime",
-    "data",
-    "tools"  # 도구 폴더 제외 (자기 자신 포함)
+    "data"
 }
 
 # 허용되는 예시 파일
@@ -54,6 +53,10 @@ def scan_files(root_dir):
         dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
         
         for file in files:
+            # 자기 자신(secret_guard.py)은 스캔에서 제외 (오탐 방지)
+            if file == "secret_guard.py":
+                continue
+                
             file_path = os.path.join(root, file)
             rel_path = os.path.relpath(file_path, root_dir)
             
