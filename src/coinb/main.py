@@ -41,6 +41,7 @@ def main() -> None:
             "paper-performance",
             "rejection-diagnostics",
             "build-config-experiments",
+            "volume-threshold-diagnostics",
         ],
         help="실행할 명령",
     )
@@ -188,6 +189,12 @@ def main() -> None:
         "--output-dir",
         default="configs/experiments",
         help="build-config-experiments 용 출력 디렉토리",
+    )
+    
+    parser.add_argument(
+        "--ws",
+        default="logs/upbit_ws_events.jsonl",
+        help="volume-threshold-diagnostics 용 WebSocket 로그 경로",
     )
 
     args = parser.parse_args()
@@ -338,6 +345,15 @@ def main() -> None:
             base_config=args.base_config,
             diagnostics=args.diagnostics,
             output_dir=args.output_dir,
+        )
+
+    elif args.command == "volume-threshold-diagnostics":
+        from .volume_threshold_diagnostics import run_diagnostics
+        
+        result = run_diagnostics(
+            ws_path=args.ws,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
         )
 
     else:
