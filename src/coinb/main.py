@@ -39,6 +39,7 @@ def main() -> None:
             "paper-config-candidates",
             "ddm-status",
             "paper-performance",
+            "rejection-diagnostics",
         ],
         help="실행할 명령",
     )
@@ -300,6 +301,15 @@ def main() -> None:
             equity_output_path=args.equity_output,
             summary_output_path=args.summary_output,
             starting_cash_krw=starting_cash,
+        )
+
+    elif args.command == "rejection-diagnostics":
+        from .rejection_diagnostics import run_rejection_diagnostics
+
+        result = run_rejection_diagnostics(
+            decisions_path=args.decisions,
+            output_json_path=args.output_json,
+            output_txt_path=args.output_txt,
         )
 
     else:
