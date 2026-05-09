@@ -16,6 +16,7 @@ from coinb.learning_log import build_learning_dataset
 from coinb.microstructure import build_microstructure_report
 from coinb.orderflow_loss_analyzer import build_orderflow_loss_analysis
 from coinb.orderflow_paper import run_orderflow_paper_step
+from coinb.paper_performance import run_paper_performance
 from coinb.paper_review import build_paper_review
 from coinb.upbit_ws import collect_upbit_ws_events
 
@@ -49,6 +50,7 @@ class PaperEngine:
             self._run_learning()
             self._run_loss_analysis()
             self._run_review()
+            self._run_performance()
             self._run_ddm()
             self._cleanup_logs()
             
@@ -142,6 +144,25 @@ class PaperEngine:
             loss_analysis_path="reports/orderflow_loss_analysis.json",
             output_path="reports/paper_review_latest.txt",
         )
+
+    def _run_performance(self):
+        try:
+            self.last_success_step = "performance-update"
+            portfolio = self.config.get("portfolio", {})
+            starting_cash = float(portfolio.get("starting_cash_krw", 1000000.0))
+            
+            run_paper_performance(
+                trades_path="logs/orderflow_paper_trades.jsonl",
+                decisions_path="logs/orderflow_paper_decisions.jsonl",
+                output_json_path="reports/paper_performance.json",
+                equity_output_path="logs/paper_equity_curve.jsonl",
+                summary_output_path="reports/paper_performance_summary.txt",
+                starting_cash_krw=starting_cash
+            )
+        except Exception as e:
+            # 엔진 전체가 죽지 않게 예외 처리
+            self.last_error = f"Performance Error: {type(e).__name__}: {str(e)}"
+            logger.error(self.last_error)
 
     def _run_ddm(self):
         self.last_success_step = "ddm-update"
