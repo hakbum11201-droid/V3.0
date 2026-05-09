@@ -72,3 +72,9 @@
 *   **자동 적용 금지**: 본 문서는 실험 계획이며, 실제 전략 로직이나 `config/config.json`에 자동으로 반영하지 않습니다.
 *   **원금 방어 우선**: 거래 횟수를 늘리기 위해 리스크 관리(Hard Block)를 완화하지 않습니다.
 *   **정량적 검증**: 반드시 `net_pnl`과 MDD 데이터가 뒷받침될 때만 구조 전환을 승인합니다.
+
+---
+
+## 6. 참고 자료
+*   **후보 설정 파일**: [configs/experiments/soft_score_candidate_v1.json](file:///c:/Users/hakbu/Downloads/coinB_PRO_V3_0_FINAL_ROOT_READY_v3_0/V3.0/configs/experiments/soft_score_candidate_v1.json)
+*   **세부 진단 요약**: [docs/SOFT_SCORE_CANDIDATE_V1_SUMMARY_KR.md](file:///c:/Users/hakbu/Downloads/coinB_PRO_V3_0_FINAL_ROOT_READY_v3_0/V3.0/docs/SOFT_SCORE_CANDIDATE_V1_SUMMARY_KR.md)
