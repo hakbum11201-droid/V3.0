@@ -33,6 +33,7 @@ def main() -> None:
             "orderflow-paper",
             "learning-log",
             "loss-analysis",
+            "paper-review",
         ],
         help="실행할 명령",
     )
@@ -108,6 +109,12 @@ def main() -> None:
         "--loss-output",
         default="reports/orderflow_loss_analysis.json",
         help="손실 패턴 분석 리포트 저장 경로",
+    )
+
+    parser.add_argument(
+        "--review-output",
+        default="reports/paper_review_latest.txt",
+        help="Paper 리뷰 자동 요약 저장 경로",
     )
 
     args = parser.parse_args()
@@ -198,6 +205,14 @@ def main() -> None:
             decisions_path=args.paper_decisions,
             trades_path=args.paper_trades,
             output_path=args.loss_output,
+        )
+
+    elif args.command == "paper-review":
+        from .paper_review import build_paper_review
+
+        result = build_paper_review(
+            loss_analysis_path=args.loss_output,
+            output_path=args.review_output,
         )
 
     else:

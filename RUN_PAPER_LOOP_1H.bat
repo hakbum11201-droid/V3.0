@@ -58,8 +58,19 @@ if errorlevel 1 goto ERROR
 
 echo.
 echo ========================================
+echo FINAL paper-review
+echo ========================================
+python -m coinb.main paper-review --loss-output reports/orderflow_loss_analysis.json --review-output reports/paper_review_latest.txt
+if errorlevel 1 goto ERROR
+
+echo.
+echo ========================================
 echo PAPER LOOP COMPLETE
 echo ========================================
+
+echo.
+echo [ REVIEW SUMMARY ]
+type reports\paper_review_latest.txt
 
 echo.
 echo logs:
