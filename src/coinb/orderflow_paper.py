@@ -249,6 +249,19 @@ def check_entry_condition(
 
     score = calc_entry_score(features)
 
+    # DDM Gate Check: 신규 진입 차단 상태 확인
+    ddm = read_json("reports/ddm_status.json", default={})
+    if ddm.get("should_block_new_entry") is True:
+        diag = {
+            "checked_field": "ddm.should_block_new_entry",
+            "actual_value": True,
+            "required_value": False,
+            "ddm_status": ddm.get("status"),
+            "risk_level": ddm.get("risk_level"),
+            "summary": ddm.get("summary")
+        }
+        return make_decision(market, "NO_BUY", "DDM_BLOCK_NEW_ENTRY", score, price, features, {"diagnostic": diag})
+
     if len(positions) >= max_open_positions:
         return make_decision(market, "NO_BUY", "RISK_BLOCKED:MAX_POSITIONS", score, price, features, {})
 
