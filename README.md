@@ -95,6 +95,23 @@ python -m coinb.main paper-config-candidates --decisions logs/orderflow_paper_de
 
 ---
 
+## 5. UI Dashboard (로컬 관제 시스템)
+
+V3.1부터 제공되는 개인용 로컬 관제 UI(Streamlit)는 다음 스크립트로 실행합니다.
+웹 브라우저를 통해 마켓 보드, 최근 판단 로그, 리포트 요약을 시각적으로 확인할 수 있습니다.
+
+```
+RUN_COINB_ALL.bat
+```
+또는 PowerShell 환경에서:
+```powershell
+$env:PYTHONPATH = "$PWD\src"
+streamlit run src/coinb/ui_dashboard.py
+```
+접속 주소: `http://localhost:8501`
+
+---
+
 ## Next Phase: UI + DDM Roadmap
 
 다음 개발 단계인 개인용 관제 UI, DDM(Drawdown Defense Manager) 및 계좌/성과 추적 계획은 아래 문서에서 확인할 수 있습니다.
