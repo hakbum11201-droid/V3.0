@@ -265,3 +265,23 @@ with tab1:
     st.text_area("Paper Review Latest", paper_review, height=400)
 with tab2:
     st.text_area("Config Candidates", config_candidates, height=400)
+
+# 7. 계좌 / 키 / 보안 상태
+st.header("7. 계좌 / 키 / 보안 상태")
+with st.expander("보안 및 API Key 상태 안내", expanded=True):
+    scol1, scol2 = st.columns(2)
+    with scol1:
+        st.write("### 시스템 상태")
+        st.write("- **현재 모드:** Keyless Paper Mode")
+        st.write("- **API Key:** 미사용")
+        st.write("- **계좌 조회:** 비활성")
+        st.write("- **실제 주문:** 비활성")
+    with scol2:
+        st.write("### 보안 및 관리 원칙")
+        st.write("- **조회 전용 키:** 추후 .env.account에서만 사용")
+        st.write("- **tiny_live 주문 키:** 추후 .env.live에서만 사용")
+        st.write("- **UI 접속:** 로컬 전용 권장 (http://localhost:8501)")
+        st.write("- **외부 접속/포트포워딩/DMZ:** 사용 금지")
+        st.write("- **출금 권한:** 절대 사용 금지")
+    
+    st.info("💡 현재는 실거래 기능이 완전히 차단된 안전한 페이퍼 모드입니다.")
