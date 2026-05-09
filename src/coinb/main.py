@@ -38,6 +38,7 @@ def main() -> None:
             "paper-review",
             "paper-config-candidates",
             "ddm-status",
+            "paper-performance",
         ],
         help="실행할 명령",
     )
@@ -136,7 +137,7 @@ def main() -> None:
     parser.add_argument(
         "--output-json",
         default="reports/orderflow_config_candidates.json",
-        help="paper_config_candidates json 출력 경로",
+        help="json 출력 경로 (paper-config-candidates 또는 paper-performance)",
     )
 
     parser.add_argument(
@@ -149,6 +150,24 @@ def main() -> None:
         "--ddm-output",
         default="reports/ddm_status.json",
         help="DDM 상태 저장 경로",
+    )
+
+    parser.add_argument(
+        "--trades",
+        default="logs/orderflow_paper_trades.jsonl",
+        help="paper-performance 용 trades 파일 경로",
+    )
+
+    parser.add_argument(
+        "--equity-output",
+        default="logs/paper_equity_curve.jsonl",
+        help="paper-performance equity curve 저장 경로",
+    )
+
+    parser.add_argument(
+        "--summary-output",
+        default="reports/paper_performance_summary.txt",
+        help="paper-performance summary txt 저장 경로",
     )
 
     args = parser.parse_args()
@@ -265,6 +284,22 @@ def main() -> None:
         result = run_ddm_status(
             config_path=args.config,
             output_path=args.ddm_output,
+        )
+
+    elif args.command == "paper-performance":
+        cfg = load_config(args.config)
+        portfolio = cfg.get("portfolio", {})
+        starting_cash = float(portfolio.get("starting_cash_krw", 1000000.0))
+
+        from .paper_performance import run_paper_performance
+
+        result = run_paper_performance(
+            trades_path=args.trades,
+            decisions_path=args.decisions,
+            output_json_path=args.output_json,
+            equity_output_path=args.equity_output,
+            summary_output_path=args.summary_output,
+            starting_cash_krw=starting_cash,
         )
 
     else:
