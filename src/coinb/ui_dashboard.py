@@ -41,6 +41,9 @@ trades = load_jsonl("logs/orderflow_paper_trades.jsonl", 100)
 heartbeat = load_json("runtime/heartbeat.json")
 engine_status = load_json("runtime/engine_status.json")
 storage_status = load_json("reports/storage_status.json")
+perf = load_json("reports/paper_performance.json")
+perf_summary_txt = load_text("reports/paper_performance_summary.txt")
+equity_curve = load_jsonl("logs/paper_equity_curve.jsonl", 1000)
 
 st.title("coinB PRO V3.1 Dashboard")
 
@@ -171,31 +174,75 @@ if features_by_market:
 else:
     st.info("No market data available.")
 
-# 4. Paper 성과판 & Rejection Reason
-st.header("4. Paper Performance & Rejections")
-col1, col2 = st.columns([1, 2])
-with col1:
-    summary = loss_analysis.get("summary", {})
-    st.subheader("Performance summary")
-    st.json(summary)
+# 4. 페이퍼 성과판 (Paper Performance)
+st.header("4. 페이퍼 성과판 (Paper Performance)")
+if perf:
+    pcol1, pcol2, pcol3, pcol4 = st.columns(4)
+    pcol1.metric("총 판단 수", f"{perf.get('decision_count', 0):,}")
+    pcol2.metric("총 거래 수", f"{perf.get('trade_count', 0):,}")
+    pcol3.metric("시작 자산", f"{perf.get('starting_cash_krw', 0):,} KRW")
+    pcol4.metric("최종 자산", f"{perf.get('final_equity_krw', 0):,} KRW")
 
-with col2:
-    st.subheader("Top Rejection Reasons")
+    pcol5, pcol6, pcol7, pcol8 = st.columns(4)
+    pcol5.metric("실현손익", f"{perf.get('realized_pnl_krw', 0):,} KRW")
+    pcol6.metric("미실현손익", f"{perf.get('unrealized_pnl_krw', 0):,} KRW")
+    pcol7.metric("총 손익", f"{perf.get('total_pnl_krw', 0):,} KRW")
+    pcol8.metric("총 수익률", f"{perf.get('total_pnl_pct', 0):.4f}%")
+
+    pcol9, pcol10, pcol11, pcol12 = st.columns(4)
+    pcol9.metric("승률", f"{perf.get('win_rate', 0):.2f}%")
+    pcol10.metric("평균 손익률", f"{perf.get('avg_pnl_pct', 0):.4f}%")
+    pcol11.metric("최대 낙폭 (MDD)", f"{perf.get('max_drawdown_pct', 0):.4f}%")
+    pcol12.metric("최대 연속 손실", f"{perf.get('max_consecutive_losses', 0)}")
+
+    st.write(f"**현재 연속 손실:** {perf.get('consecutive_losses', 0)}")
+
+    # Equity Curve Chart
+    if equity_curve:
+        st.subheader("자산 곡선 (Equity Curve)")
+        df_equity = pd.DataFrame(equity_curve)
+        if "timestamp" in df_equity.columns:
+            df_equity["timestamp"] = pd.to_datetime(df_equity["timestamp"], unit="s")
+            df_equity = df_equity.set_index("timestamp")
+            st.line_chart(df_equity["equity"])
+    
+    # Market Summary Table
+    market_perf = perf.get("market_summary", {})
+    if market_perf:
+        st.subheader("마켓별 성과 요약")
+        m_data = []
+        for mkt, s in market_perf.items():
+            m_data.append({
+                "마켓": mkt,
+                "거래 횟수": s.get("trade_count", 0),
+                "총 수익(KRW)": s.get("pnl_krw", 0),
+                "승률(%)": s.get("win_rate", 0)
+            })
+        st.dataframe(pd.DataFrame(m_data), use_container_width=True)
+
+    # Summary Text
+    if perf_summary_txt and "File not found" not in perf_summary_txt:
+        with st.expander("성과 요약 리포트 (텍스트)", expanded=False):
+            st.text(perf_summary_txt)
+
+    # Rejection Reasons (from loss analysis)
+    st.subheader("진입 거절 사유 요약 (Top Rejections)")
     reason_summary = loss_analysis.get("reason_summary", {})
     if reason_summary:
         r_list = []
         for key, val in reason_summary.items():
             r_list.append({
-                "Reason": val.get("reason"),
-                "Count": val.get("count"),
-                "Action": val.get("action")
+                "사유": val.get("reason"),
+                "횟수": val.get("count"),
+                "조치": val.get("action")
             })
-        st.dataframe(pd.DataFrame(r_list).sort_values("Count", ascending=False), use_container_width=True)
-    else:
-        st.info("No rejections recorded.")
+        st.dataframe(pd.DataFrame(r_list).sort_values("횟수", ascending=False), use_container_width=True)
+
+else:
+    st.info("성과 데이터가 아직 생성되지 않았습니다.")
 
 # 5. 최근 판단 로그
-st.header("5. Recent Decisions (Top 100)")
+st.header("5. 최근 판단 로그 (최근 100건)")
 if decisions:
     dec_df = pd.DataFrame(decisions)
     if "timestamp" in dec_df.columns:
@@ -211,8 +258,8 @@ if decisions:
 else:
     st.info("No decisions recorded.")
 
-# 6. 리포트 표시
-st.header("6. Reports")
+# 6. 리포트 (Reports)
+st.header("6. 리포트 (Reports)")
 tab1, tab2 = st.tabs(["Paper Review", "Config Candidates"])
 with tab1:
     st.text_area("Paper Review Latest", paper_review, height=400)
