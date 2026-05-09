@@ -52,7 +52,7 @@ st.header("1. 시스템 / 엔진 상태")
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("모드", heartbeat.get("mode", "paper"))
 col2.metric("실거래 활성화 여부", str(heartbeat.get("live_enabled", False)))
-col3.metric("최근 WS 이벤트 수", heartbeat.get("last_ws_event_count", 0))
+col3.metric("최근 WS 이벤트 수", heartbeat.get("last_ws_event_count", engine_status.get("last_ws_event_count", 0)))
 col4.metric("반복 횟수", heartbeat.get("loop_count", 0))
 
 col5, col6, col7, col8 = st.columns(4)

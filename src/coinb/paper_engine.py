@@ -75,7 +75,7 @@ class PaperEngine:
             include_trade=True,
             include_orderbook=True,
         )
-        self.last_ws_event_count = result.get("event_count", 0)
+        self.last_ws_event_count = result.get("received_count", 0)
 
     def _run_microstructure(self):
         self.last_success_step = "microstructure"
@@ -255,6 +255,7 @@ class PaperEngine:
             "started_at": time.time() if self.loop_count == 0 else None, # Needs persistence ideally, but good enough for now
             "last_cycle_at": time.time(),
             "current_cycle": self.loop_count,
+            "last_ws_event_count": self.last_ws_event_count,
             "last_success_step": self.last_success_step,
             "last_error": self.last_error,
             "raw_log_path": self.ws_raw_dir,
