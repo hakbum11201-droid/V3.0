@@ -49,6 +49,7 @@ def main() -> None:
             "soft-score-net-edge-sim",
             "net-edge-candidate-diagnostics",
             "net-edge-winner-profile",
+            "market-excursion-diagnostics",
         ],
         help="실행할 명령",
     )
@@ -472,6 +473,15 @@ def main() -> None:
             opportunity_path=args.opportunity,
             backtest_path=args.backtest,
             net_edge_diag_path=args.net_edge_diagnostics,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "market-excursion-diagnostics":
+        from .market_excursion_diagnostics import run_market_excursion_diagnostics
+        
+        result = run_market_excursion_diagnostics(
+            ws_path=args.ws,
             output_json=args.output_json,
             output_txt=args.output_txt,
         )
