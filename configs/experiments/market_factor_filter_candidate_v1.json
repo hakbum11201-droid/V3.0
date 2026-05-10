@@ -1,0 +1,33 @@
+{
+  "name": "market_factor_filter_candidate_v1",
+  "mode": "paper_experiment_only",
+  "description": "Market regime filter for short-term trend entries based on volatility, imbalance, spread, and depth",
+  "market_factor_filter": {
+    "min_volatility_300s_pct": 0.05,
+    "min_imbalance_300s": 0.10,
+    "min_bid_ask_depth_ratio_5": 1.50,
+    "max_spread_pct": 0.12,
+    "min_depth_total_5": 0,
+    "require_btc_alignment": false,
+    "require_market_sync": false
+  },
+  "apply_before": [
+    "short_term_trend_score",
+    "net_edge_gate",
+    "ddm_gate"
+  ],
+  "hard_blocks": [
+    "DDM_DATA_ERROR",
+    "DDM_BLOCK_NEW_ENTRY",
+    "DATA_STALE",
+    "MARKET_WARNING",
+    "SPREAD_EXCEEDS_TARGET_PROFIT",
+    "INSUFFICIENT_EXIT_LIQUIDITY",
+    "DAILY_LOSS_LIMIT",
+    "MDD_LIMIT",
+    "CONSECUTIVE_LOSS_LIMIT"
+  ],
+  "requires_net_edge_positive": true,
+  "requires_ddm_normal": true,
+  "auto_apply": false
+}
