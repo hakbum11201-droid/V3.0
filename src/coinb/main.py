@@ -55,6 +55,7 @@ def main() -> None:
             "short-term-trend-weight-optimizer",
             "market-factor-diagnostics",
             "market-factor-filter-backtest",
+            "market-factor-filter-winner-profile",
         ],
         help="실행할 명령",
     )
@@ -546,6 +547,15 @@ def main() -> None:
             ws_path=args.ws,
             market_filter_path=args.market_filter,
             trend_candidate_path=args.trend_candidate,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "market-factor-filter-winner-profile":
+        from .market_factor_filter_winner_profile import run_market_factor_filter_winner_profile
+        
+        result = run_market_factor_filter_winner_profile(
+            backtest_path=args.backtest,
             output_json=args.output_json,
             output_txt=args.output_txt,
         )

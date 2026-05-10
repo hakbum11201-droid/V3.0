@@ -124,7 +124,8 @@ def run_market_factor_filter_backtest(ws_path: str, market_filter_path: str, tre
         "total_samples": len(samples_list),
         "filter_pass_count": pass_count,
         "filter_pass_rate": float(pass_count / len(samples_list) * 100),
-        "stats": {}
+        "stats": {},
+        "samples": samples_list
     }
 
     print("[CombinedBT] Aggregating performance stats...")
@@ -152,8 +153,21 @@ def run_market_factor_filter_backtest(ws_path: str, market_filter_path: str, tre
                 "after": get_group_stats(True)
             }
 
+    def to_json_ready(obj):
+        if isinstance(obj, dict):
+            return {k: to_json_ready(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [to_json_ready(v) for v in obj]
+        elif isinstance(obj, (np.float64, np.float32)):
+            return float(obj)
+        elif isinstance(obj, (np.int64, np.int32)):
+            return int(obj)
+        elif isinstance(obj, (np.bool_, bool)):
+            return bool(obj)
+        return obj
+
     with open(output_json, 'w', encoding='utf-8') as f:
-        json.dump(results, f, indent=2)
+        json.dump(to_json_ready(results), f, indent=2)
 
     generate_summary_txt(results, output_txt, thresholds, windows)
     print(f"[CombinedBT] Done. Reports: {output_json}, {output_txt}")
