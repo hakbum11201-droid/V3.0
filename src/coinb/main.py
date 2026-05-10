@@ -50,6 +50,7 @@ def main() -> None:
             "net-edge-candidate-diagnostics",
             "net-edge-winner-profile",
             "market-excursion-diagnostics",
+            "short-term-trend-diagnostics",
         ],
         help="실행할 명령",
     )
@@ -481,6 +482,15 @@ def main() -> None:
         from .market_excursion_diagnostics import run_market_excursion_diagnostics
         
         result = run_market_excursion_diagnostics(
+            ws_path=args.ws,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "short-term-trend-diagnostics":
+        from .short_term_trend_diagnostics import run_short_term_trend_diagnostics
+        
+        result = run_short_term_trend_diagnostics(
             ws_path=args.ws,
             output_json=args.output_json,
             output_txt=args.output_txt,
