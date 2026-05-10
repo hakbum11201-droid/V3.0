@@ -52,6 +52,7 @@ def main() -> None:
             "market-excursion-diagnostics",
             "short-term-trend-diagnostics",
             "short-term-trend-backtest",
+            "short-term-trend-weight-optimizer",
         ],
         help="실행할 명령",
     )
@@ -501,6 +502,16 @@ def main() -> None:
         from .short_term_trend_backtest import run_short_term_trend_backtest
         
         result = run_short_term_trend_backtest(
+            ws_path=args.ws,
+            candidate_path=args.candidate,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "short-term-trend-weight-optimizer":
+        from .short_term_trend_weight_optimizer import run_short_term_trend_weight_optimizer
+        
+        result = run_short_term_trend_weight_optimizer(
             ws_path=args.ws,
             candidate_path=args.candidate,
             output_json=args.output_json,
