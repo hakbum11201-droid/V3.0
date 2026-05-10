@@ -54,6 +54,7 @@ def main() -> None:
             "short-term-trend-backtest",
             "short-term-trend-weight-optimizer",
             "market-factor-diagnostics",
+            "market-factor-filter-backtest",
         ],
         help="실행할 명령",
     )
@@ -243,6 +244,16 @@ def main() -> None:
         "--net-edge-diagnostics",
         default="reports/net_edge_candidate_diagnostics.json",
         help="net-edge-winner-profile 용 진단 결과 경로",
+    )
+
+    parser.add_argument(
+        "--market-filter",
+        help="Market Factor Filter 후보 설정 파일 경로",
+    )
+
+    parser.add_argument(
+        "--trend-candidate",
+        help="Short-Term Trend 후보 설정 파일 경로",
     )
 
     args = parser.parse_args()
@@ -524,6 +535,17 @@ def main() -> None:
         
         result = run_market_factor_diagnostics(
             ws_path=args.ws,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "market-factor-filter-backtest":
+        from .market_factor_filter_backtest import run_market_factor_filter_backtest
+        
+        result = run_market_factor_filter_backtest(
+            ws_path=args.ws,
+            market_filter_path=args.market_filter,
+            trend_candidate_path=args.trend_candidate,
             output_json=args.output_json,
             output_txt=args.output_txt,
         )
