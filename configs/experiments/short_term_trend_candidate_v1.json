@@ -1,0 +1,34 @@
+{
+  "name": "short_term_trend_candidate_v1",
+  "mode": "paper_experiment_only",
+  "description": "5-10 minute orderflow short-term trend candidate based on imbalance_10s and price_chg_10s",
+  "holding_windows_sec": [300, 600],
+  "cost_floor_pct": 0.20,
+  "entry_threshold": 85,
+  "threshold_candidates": [75, 85, 95],
+  "weights": {
+    "imbalance_10s_score": 30,
+    "price_chg_10s_score": 25,
+    "volume_10s_score": 20,
+    "spread_score": 15,
+    "depth_score": 10,
+    "absorption_score": 10,
+    "continuation_score": 20,
+    "sweep_score": 0
+  },
+  "hard_blocks": [
+    "DDM_DATA_ERROR",
+    "DDM_BLOCK_NEW_ENTRY",
+    "BTC_CRASH",
+    "DATA_STALE",
+    "SPREAD_EXCEEDS_TARGET_PROFIT",
+    "INSUFFICIENT_EXIT_LIQUIDITY",
+    "MARKET_WARNING",
+    "DAILY_LOSS_LIMIT",
+    "MDD_LIMIT",
+    "CONSECUTIVE_LOSS_LIMIT"
+  ],
+  "requires_net_edge_positive": true,
+  "requires_ddm_normal": true,
+  "auto_apply": false
+}
