@@ -51,6 +51,7 @@ def main() -> None:
             "net-edge-winner-profile",
             "market-excursion-diagnostics",
             "short-term-trend-diagnostics",
+            "short-term-trend-backtest",
         ],
         help="실행할 명령",
     )
@@ -492,6 +493,16 @@ def main() -> None:
         
         result = run_short_term_trend_diagnostics(
             ws_path=args.ws,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "short-term-trend-backtest":
+        from .short_term_trend_backtest import run_short_term_trend_backtest
+        
+        result = run_short_term_trend_backtest(
+            ws_path=args.ws,
+            candidate_path=args.candidate,
             output_json=args.output_json,
             output_txt=args.output_txt,
         )
