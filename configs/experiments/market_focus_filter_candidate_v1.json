@@ -1,0 +1,27 @@
+{
+  "name": "market_focus_filter_candidate_v1",
+  "mode": "paper_experiment_only",
+  "description": "Market focus filter for selecting the current leading market after market factor filter pass",
+  "market_focus_filter": {
+    "market_focus_mode": "dynamic_leader",
+    "allow_static_market_focus": true,
+    "static_focus_markets": ["KRW-SOL"],
+    "min_buy_trade_value_10s": 1000000,
+    "require_overheated_volume_bucket": true,
+    "min_relative_volume_share": 0.30,
+    "max_focus_markets": 1,
+    "fallback_to_all_markets": false,
+    "require_market_factor_pass": true
+  },
+  "apply_after": [
+    "market_factor_filter"
+  ],
+  "apply_before": [
+    "short_term_trend_score",
+    "net_edge_gate",
+    "ddm_gate"
+  ],
+  "requires_net_edge_positive": true,
+  "requires_ddm_normal": true,
+  "auto_apply": false
+}
