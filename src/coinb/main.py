@@ -57,6 +57,7 @@ def main() -> None:
             "market-factor-filter-backtest",
             "market-factor-filter-winner-profile",
             "market-focus-diagnostics",
+            "combined-filter-backtest",
         ],
         help="실행할 명령",
     )
@@ -261,6 +262,16 @@ def main() -> None:
     parser.add_argument(
         "--winner-profile",
         help="Market Factor Filter Winner Profile 결과 경로",
+    )
+
+    parser.add_argument(
+        "--market-factor",
+        help="Market Factor Filter 후보 설정 파일 경로",
+    )
+
+    parser.add_argument(
+        "--market-focus",
+        help="Market Focus Filter 후보 설정 파일 경로",
     )
 
     args = parser.parse_args()
@@ -572,6 +583,18 @@ def main() -> None:
         result = run_market_focus_diagnostics(
             backtest_path=args.backtest,
             winner_profile_path=args.winner_profile,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "combined-filter-backtest":
+        from .combined_filter_backtest import run_combined_filter_backtest
+        
+        result = run_combined_filter_backtest(
+            ws_path=args.ws,
+            market_factor_path=args.market_factor,
+            market_focus_path=args.market_focus,
+            trend_candidate_path=args.trend_candidate,
             output_json=args.output_json,
             output_txt=args.output_txt,
         )
