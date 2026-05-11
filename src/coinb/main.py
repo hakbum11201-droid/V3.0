@@ -60,6 +60,7 @@ def main() -> None:
             "combined-filter-backtest",
             "combined-filter-optimizer",
             "market-factor-threshold-calibrator",
+            "combined-filter-exit-simulator",
         ],
         help="실행할 명령",
     )
@@ -610,6 +611,18 @@ def main() -> None:
         from .combined_filter_optimizer import run_combined_filter_optimizer
         
         result = run_combined_filter_optimizer(
+            ws_path=args.ws,
+            market_factor_path=args.market_factor,
+            market_focus_path=args.market_focus,
+            trend_candidate_path=args.trend_candidate,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+        )
+
+    elif args.command == "combined-filter-exit-simulator":
+        from .combined_filter_exit_simulator import run_combined_filter_exit_simulator
+        
+        result = run_combined_filter_exit_simulator(
             ws_path=args.ws,
             market_factor_path=args.market_factor,
             market_focus_path=args.market_focus,
