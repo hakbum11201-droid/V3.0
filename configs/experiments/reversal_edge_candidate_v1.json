@@ -1,0 +1,38 @@
+{
+  "name": "reversal_edge_candidate_v1",
+  "mode": "paper_experiment_only",
+  "description": "Absorption rebound and exhaustion reversal candidate based on sell pressure, negative short-term price change, bid depth support, and volatility",
+  "holding_windows_sec": [300, 600],
+  "preferred_holding_window_sec": 600,
+  "cost_floor_pct": 0.20,
+  "threshold_candidates": [70, 80, 90],
+  "reversal_conditions": {
+    "require_negative_price_chg_10s": true,
+    "min_sell_buy_ratio_10s": 1.2,
+    "min_bid_ask_depth_ratio_5": 0.8,
+    "max_spread_pct": 0.12,
+    "min_volatility_300s_pct": 0.04
+  },
+  "weights": {
+    "negative_price_chg_score": 25,
+    "sell_pressure_score": 25,
+    "sell_buy_ratio_score": 20,
+    "bid_depth_support_score": 20,
+    "spread_safety_score": 15,
+    "volatility_score": 15,
+    "market_sync_score": 10
+  },
+  "market_focus": {
+    "allow_static_market_focus": true,
+    "static_focus_markets": ["KRW-SOL"],
+    "compare_modes": ["ALL_MARKETS", "STATIC_SOL_ONLY", "DYNAMIC_LEADER"]
+  },
+  "exit_test_candidates": {
+    "take_profit_pct": [0.20, 0.25, 0.30, 0.40],
+    "stop_loss_pct": [-0.10, -0.15, -0.20, -0.30],
+    "timeout_sec": [300, 600]
+  },
+  "requires_net_edge_positive": true,
+  "requires_ddm_normal": true,
+  "auto_apply": false
+}
