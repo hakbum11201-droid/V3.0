@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime
 from collections import defaultdict
 from typing import Any, Dict, List
+from . import report_io
 
 def calculate_percentiles(values):
     if not values:
@@ -17,12 +18,8 @@ def calculate_percentiles(values):
         return sorted_vals[min(idx, n - 1)]
 
     return {
-        "count": n,
-        "mean": sum(values) / n,
-        "p50": get_p(50),
-        "p75": get_p(75),
-        "p90": get_p(90),
-        "max": sorted_vals[-1]
+        "count": n, "mean": sum(values) / n, "p50": get_p(50),
+        "p75": get_p(75), "p90": get_p(90), "max": sorted_vals[-1]
     }
 
 def run_net_edge_candidate_diagnostics(opportunity_path, backtest_path, net_edge_path, ws_path, output_json, output_txt):
@@ -36,7 +33,7 @@ def run_net_edge_candidate_diagnostics(opportunity_path, backtest_path, net_edge
             bt_data = json.load(f)
         
         history = defaultdict(list)
-        with open(ws_path, "r", encoding="utf-8") as f:
+        with open(ws_path, "r", encoding="utf-8-sig") as f:
             for line in f:
                 try:
                     ev = json.loads(line)
@@ -55,7 +52,6 @@ def run_net_edge_candidate_diagnostics(opportunity_path, backtest_path, net_edge
     except Exception as e:
         return {"ok": False, "reason": f"Failed to load data: {e}"}
 
-    # Use all results
     all_results = bt_data.get("all_results", [])
     candidates = [r for r in all_results if r.get("total_score", 0) >= 60]
     
@@ -81,11 +77,7 @@ def run_net_edge_candidate_diagnostics(opportunity_path, backtest_path, net_edge
         if entry_idx == -1: continue
         
         cand_diag = {
-            "market": m,
-            "ts": t_entry,
-            "score": score,
-            "p_entry": p_entry,
-            "windows": {}
+            "market": m, "ts": t_entry, "score": score, "p_entry": p_entry, "windows": {}
         }
         
         for w in windows:
@@ -97,26 +89,18 @@ def run_net_edge_candidate_diagnostics(opportunity_path, backtest_path, net_edge
                 sub_history.append(p)
             
             if not sub_history:
-                mfe = 0
-                mae = 0
-                final_ret = 0
+                mfe = 0; mae = 0; final_ret = 0
             else:
                 mfe = (max(sub_history) - p_entry) / p_entry * 100
                 mae = (min(sub_history) - p_entry) / p_entry * 100
                 final_ret = (sub_history[-1] - p_entry) / p_entry * 100
             
             cand_diag["windows"][w] = {
-                "mfe": round(mfe, 4),
-                "mae": round(mae, 4),
-                "final": round(final_ret, 4),
-                "pass_020": mfe >= 0.20,
-                "pass_025": mfe >= 0.25,
-                "pass_030": mfe >= 0.30
+                "mfe": round(mfe, 4), "mae": round(mae, 4), "final": round(final_ret, 4),
+                "pass_020": mfe >= 0.20, "pass_025": mfe >= 0.25, "pass_030": mfe >= 0.30
             }
-            
         diag_results.append(cand_diag)
 
-    # Multi-threshold aggregates
     thresh_diag = {}
     for thresh in [60, 70, 80]:
         t_cands = [r for r in diag_results if r["score"] >= thresh]
@@ -135,38 +119,34 @@ def run_net_edge_candidate_diagnostics(opportunity_path, backtest_path, net_edge
         thresh_diag[str(thresh)] = w_summary
 
     report = {
-        "ok": True,
-        "generated_at": datetime.now().isoformat(),
+        "ok": True, "generated_at": datetime.now().isoformat(),
         "total_analyzed": len(diag_results),
         "threshold_diagnostics": thresh_diag,
-        "top_20_sample": diag_results[:20],
         "details": diag_results
     }
 
-    os.makedirs(os.path.dirname(output_json), exist_ok=True)
-    with open(output_json, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2)
+    report_io.write_json_report(output_json, report)
 
-    os.makedirs(os.path.dirname(output_txt), exist_ok=True)
-    with open(output_txt, "w", encoding="utf-8") as f:
-        f.write("=== Net Edge Candidate Diagnostics (All Candidates) ===\n")
-        f.write(f"Generated At: {report['generated_at']}\n")
-        f.write(f"Total Candidates Analyzed: {len(diag_results)}개\n\n")
+    lines = []
+    lines.append("=== Net Edge Candidate Diagnostics (All Candidates) ===")
+    lines.append(f"Generated At: {report['generated_at']}")
+    lines.append(f"Total Candidates Analyzed: {len(diag_results)}개\n")
+    
+    for thresh in [60, 70, 80]:
+        lines.append(f"--- [Threshold {thresh} Diagnostics] ---")
+        stats = thresh_diag[str(thresh)]
+        lines.append(f"Count: {stats['30s']['count']}개")
+        for w in [30, 60]:
+            s = stats[f"{w}s"]
+            lines.append(f"  {w}s MFE: Avg {s['mfe']['mean']:.4f}%, P90 {s['mfe']['p90']:.4f}%, Max {s['mfe']['max']:.4f}%")
+            lines.append(f"  {w}s Pass: 0.20%({s['pass_counts']['020']}회), 0.25%({s['pass_counts']['025']}회), 0.30%({s['pass_counts']['030']}회)")
+        lines.append("")
         
-        for thresh in [60, 70, 80]:
-            f.write(f"--- [Threshold {thresh} Diagnostics] ---\n")
-            stats = thresh_diag[str(thresh)]
-            f.write(f"Count: {stats['30s']['count']}개\n")
-            for w in [30, 60]:
-                s = stats[f"{w}s"]
-                f.write(f"  {w}s MFE: Avg {s['mfe']['mean']:.4f}%, P90 {s['mfe']['p90']:.4f}%, Max {s['mfe']['max']:.4f}%\n")
-                f.write(f"  {w}s Pass: 0.20%({s['pass_counts']['020']}회), 0.25%({s['pass_counts']['025']}회), 0.30%({s['pass_counts']['030']}회)\n")
-            f.write("\n")
-            
-        f.write("--- [Note] ---\n")
-        f.write("1. Analysis includes ALL candidates matching thresholds.\n")
-        f.write("2. [CAUTION] Settings are for analysis and not auto-applied.\n")
+    lines.append("--- [Note] ---")
+    lines.append("1. Analysis includes ALL candidates matching thresholds.")
+    lines.append("2. [CAUTION] Settings are for analysis and not auto-applied.")
 
+    report_io.write_text_report(output_txt, "\n".join(lines))
     return report
 
 if __name__ == "__main__":

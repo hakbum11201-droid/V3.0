@@ -4,6 +4,7 @@ import numpy as np
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 import itertools
+from . import report_io
 
 def run_combined_filter_optimizer(ws_path: str, market_factor_path: str, market_focus_path: str, trend_candidate_path: str, output_json: str, output_txt: str):
     """
@@ -13,7 +14,7 @@ def run_combined_filter_optimizer(ws_path: str, market_factor_path: str, market_
 
     if not all(os.path.exists(p) for p in [ws_path, market_factor_path, market_focus_path, trend_candidate_path]):
         result = {"ok": False, "reason": "Candidate files not found."}
-        with open(output_json, 'w', encoding='utf-8') as f: json.dump(result, f, indent=2)
+        report_io.write_json_report(output_json, result)
         return
 
     # 1. Load Constants
@@ -74,7 +75,7 @@ def run_combined_filter_optimizer(ws_path: str, market_factor_path: str, market_
     sampling_ts = np.arange(min_ts + 600, max_ts - 600, 1.0)
     all_symbols = sorted(list(market_data.keys()))
 
-    # 4. Pre-calculate Metrics (Vectorized for each point)
+    # 4. Pre-calculate Metrics
     print(f"[Optimizer] Pre-calculating metrics for {len(sampling_ts)} points...")
     metrics = {s: {
         "vol": [], "imb": [], "depth": [], "spread": [], "buy_val": [], "score": [],
@@ -82,7 +83,6 @@ def run_combined_filter_optimizer(ws_path: str, market_factor_path: str, market_
     } for s in all_symbols}
 
     for ts in sampling_ts:
-        # Cross-market total buy val for leadership
         total_buy_all = 0
         point_vals = {}
         for s in all_symbols:
@@ -96,10 +96,10 @@ def run_combined_filter_optimizer(ws_path: str, market_factor_path: str, market_
         for s in all_symbols:
             f = point_vals.get(s)
             if not f:
-                for k in metrics[s]: metrics[s][k].append(np.nan)
+                for k in metrics[s]: 
+                    if k != "total_buy_all": metrics[s][k].append(np.nan)
                 continue
             
-            # Scores and Outcomes
             score = calculate_trend_score_v4(f, weights)
             arr = symbol_arrays[s]
             idx_s = np.searchsorted(arr["ts"], ts, side='right')
@@ -121,9 +121,8 @@ def run_combined_filter_optimizer(ws_path: str, market_factor_path: str, market_
             metrics[s]["score"].append(score)
             metrics[s]["ret300"].append(r3); metrics[s]["mfe300"].append(m3)
             metrics[s]["ret600"].append(r6); metrics[s]["mfe600"].append(m6)
-            metrics[s]["total_buy_all"] = total_buy_all # Just to store
 
-    # Convert to Numpy for fast masking
+    # Convert to Numpy
     for s in all_symbols:
         for k in metrics[s]: metrics[s][k] = np.array(metrics[s][k])
 
@@ -133,53 +132,31 @@ def run_combined_filter_optimizer(ws_path: str, market_factor_path: str, market_
     print(f"[Optimizer] Searching {len(combinations)} combinations...")
     
     results_list = []
-    
     for i, combo in enumerate(combinations):
         c = dict(zip(keys, combo))
         mode, v_th, i_th, d_th, s_th, b_th, r_th, th, win = combo
         
         all_rets, all_mfes = [], []
-        
         for s in all_symbols:
             m = metrics[s]
-            # Market Factor Mask
             mask = (m["vol"] >= v_th) & (m["imb"] >= i_th) & (m["depth"] >= d_th) & (m["spread"] <= s_th)
-            # Trend Score Mask
             mask &= (m["score"] >= th)
             
-            # Mode Mask
-            if mode == "STATIC_SOL_ONLY":
-                if s != "KRW-SOL": mask[:] = False
-            elif mode == "DYNAMIC_LEADER":
-                # Leader = max buy val among all symbols at each point
-                # This is a bit slow if not pre-calculated as a mask
-                # Let's assume leadership is checked point-by-point
-                # Optimized: pre-calculate leader symbol per point
-                pass # Handled below
+            if mode == "STATIC_SOL_ONLY" and s != "KRW-SOL": mask[:] = False
             
-            # Outcome
             ret_k = f"ret{win}"; mfe_k = f"mfe{win}"
             final_mask = mask & (~np.isnan(m[ret_k]))
-            
-            # Additional Focus Check if Dynamic
-            if mode == "DYNAMIC_LEADER":
-                # Need to check if this symbol is leader and meets volume criteria
-                # For brevity in this script, we'll use point-wise leadership
-                # But for speed, let's pre-calculate leader mask
-                pass 
-            
             if np.any(final_mask):
                 all_rets.extend(m[ret_k][final_mask])
                 all_mfes.extend(m[mfe_k][final_mask])
 
         if not all_rets: continue
-        
         all_rets = np.array(all_rets); all_mfes = np.array(all_mfes)
         net_rets = all_rets - cost_floor
         avg_net = np.mean(net_rets)
         wr = np.sum(all_rets > cost_floor) / len(all_rets) * 100
         
-        if avg_net > -0.20: # Filter out very bad ones
+        if avg_net > -0.20:
             results_list.append({
                 "combo": c, "count": len(all_rets), "avg_net": float(avg_net), "win_rate": float(wr),
                 "mfe020_rate": float(np.sum(all_mfes >= 0.20) / len(all_mfes) * 100)
@@ -188,36 +165,14 @@ def run_combined_filter_optimizer(ws_path: str, market_factor_path: str, market_
     # Sort and Report
     results_list.sort(key=lambda x: x["avg_net"], reverse=True)
     top_20 = results_list[:20]
-    
     out = {
         "ok": True, "timestamp": datetime.now().isoformat(),
         "total_combinations": len(combinations),
         "positive_count": sum(1 for r in results_list if r["avg_net"] > 0),
         "top_20": top_20
     }
-    
-    with open(output_json, 'w', encoding='utf-8') as f: json.dump(out, f, indent=2)
-    
-    # Summary TXT
-    lines = [
-        "====================================================================",
-        "          Combined Filter Grid Search Optimizer (V3.0)",
-        "====================================================================",
-        f"진단 시점: {out['timestamp']}",
-        f"전체 탐색 조합: {out['total_combinations']}",
-        f"Net PnL 양수 조합 수: {out['positive_count']}",
-        ""
-    ]
-    if top_20:
-        lines.append("--- [Top 5 Best Combinations] ---")
-        for i, r in enumerate(top_20[:5]):
-            lines.append(f"{i+1}. Net PnL: {r['avg_net']:.4f}% | WR: {r['win_rate']:.2f}% | Count: {r['count']}")
-            lines.append(f"   Config: {r['combo']}")
-    else:
-        lines.append("양수 수익을 기록한 조합이 없습니다.")
-
-    lines.append("\n※ 자동 config 반영 금지. 실거래 반영 금지.")
-    with open(output_txt, 'w', encoding='utf-8') as f: f.write("\n".join(lines))
+    report_io.write_json_report(output_json, out)
+    generate_summary_txt(out, output_txt)
     print(f"[Optimizer] Done. Reports: {output_json}, {output_txt}")
 
 def calculate_factors_v4(data, arr, ts):
@@ -232,19 +187,16 @@ def calculate_factors_v4(data, arr, ts):
     v_tot = sum(t["price"] * t["vol"] for t in rel_t300)
     v_buy = sum(t["price"] * t["vol"] for t in rel_t300 if t["side"] == 'ASK')
     imb300 = (v_buy - (v_tot - v_buy)) / v_tot if v_tot > 0 else 0
-    
     idx_s10 = np.searchsorted(arr["ts"], ts - 10, side='left')
     rel_t10 = data["trades"][idx_s10:idx_end]
     v_buy10 = sum(t["price"] * t["vol"] for t in rel_t10 if t["side"] == 'ASK')
     p10 = (price - arr["pr"][idx_s10]) / arr["pr"][idx_s10] * 100.0 if idx_end > idx_s10 else 0
-    
     spread = 0.1; depth = 1.0
     if data["ob"]:
         units = data["ob"].get("orderbook_units", []) or data["ob"].get("raw", {}).get("orderbook_units", [])
         if units:
             spread = (float(units[0]["ask_price"]) - float(units[0]["bid_price"])) / float(units[0]["bid_price"]) * 100.0
             depth = sum(float(u["bid_size"]) for u in units[:5]) / sum(float(u["ask_size"]) for u in units[:5]) if sum(float(u["ask_size"]) for u in units[:5]) > 0 else 1.0
-            
     return {
         "price": price, "volatility_300s": volat, "imbalance_300s": imb300, "imbalance_10s": imb300,
         "depth_ratio": depth, "spread_pct": spread, "price_chg_10s": p10, "buy_trade_value_10s": v_buy10
@@ -261,3 +213,22 @@ def calculate_trend_score_v4(f, weights):
         "absorption_score": 50, "continuation_score": 50, "sweep_score": 0
     }
     return sum(scores[k] * weights.get(k, 0) for k in scores) / sum(weights.values())
+
+def generate_summary_txt(out, output_txt):
+    lines = []
+    lines.append("====================================================================")
+    lines.append("          Combined Filter Grid Search Optimizer (V3.0)")
+    lines.append("====================================================================")
+    lines.append(f"진단 시점: {out['timestamp']}")
+    lines.append(f"전체 탐색 조합: {out['total_combinations']}")
+    lines.append(f"Net PnL 양수 조합 수: {out['positive_count']}")
+    lines.append("")
+    if out["top_20"]:
+        lines.append("--- [Top 5 Best Combinations] ---")
+        for i, r in enumerate(out["top_20"][:5]):
+            lines.append(f"{i+1}. Net PnL: {r['avg_net']:.4f}% | WR: {r['win_rate']:.2f}% | Count: {r['count']}")
+            lines.append(f"   Config: {r['combo']}")
+    else:
+        lines.append("양수 수익을 기록한 조합이 없습니다.")
+    lines.append("\n※ 자동 config 반영 금지. 실거래 반영 금지.")
+    report_io.write_text_report(output_txt, "\n".join(lines))

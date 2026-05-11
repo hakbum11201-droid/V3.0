@@ -3,6 +3,7 @@ import os
 import numpy as np
 from datetime import datetime
 from typing import Dict, List, Any, Optional
+from . import report_io
 
 def run_market_factor_threshold_calibrator(market_factor_path: str, output_json: str, output_txt: str, candidate_output: str):
     """
@@ -12,7 +13,7 @@ def run_market_factor_threshold_calibrator(market_factor_path: str, output_json:
 
     if not os.path.exists(market_factor_path):
         result = {"ok": False, "reason": "Market factor diagnostic file not found."}
-        with open(output_json, 'w', encoding='utf-8') as f: json.dump(result, f, indent=2)
+        report_io.write_json_report(output_json, result)
         return
 
     with open(market_factor_path, 'r', encoding='utf-8') as f:
@@ -20,7 +21,7 @@ def run_market_factor_threshold_calibrator(market_factor_path: str, output_json:
 
     if not diag.get("ok", False) or "comparison" not in diag:
         result = {"ok": False, "reason": "Invalid diagnostic data format."}
-        with open(output_json, 'w', encoding='utf-8') as f: json.dump(result, f, indent=2)
+        report_io.write_json_report(output_json, result)
         return
 
     comp = diag["comparison"]
@@ -116,13 +117,8 @@ def run_market_factor_threshold_calibrator(market_factor_path: str, output_json:
     })
 
     # Output Files
-    os.makedirs(os.path.dirname(output_json), exist_ok=True)
-    with open(output_json, 'w', encoding='utf-8') as f:
-        json.dump(calib_results, f, indent=2)
-
-    with open(candidate_output, 'w', encoding='utf-8') as f:
-        json.dump(calib_results["v2_proposal"], f, indent=2)
-
+    report_io.write_json_report(output_json, calib_results)
+    report_io.write_json_report(candidate_output, calib_results["v2_proposal"])
     generate_summary_txt(calib_results, output_txt)
     print(f"[Calibrator] Done. Reports: {output_json}, {output_txt}, {candidate_output}")
 
@@ -160,5 +156,4 @@ def generate_summary_txt(res, output_txt):
     lines.append("")
     lines.append("※ 자동 config 반영 금지. 실거래 반영 금지.")
 
-    with open(output_txt, 'w', encoding='utf-8') as f:
-        f.write("\n".join(lines))
+    report_io.write_text_report(output_txt, "\n".join(lines))

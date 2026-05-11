@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime
 from collections import defaultdict
 from typing import Any, Dict, List
+from . import report_io
 
 def run_soft_score_net_edge_sim(opportunity_path, backtest_path, candidate_path, ws_path, output_json, output_txt):
     if not os.path.exists(opportunity_path):
@@ -20,7 +21,7 @@ def run_soft_score_net_edge_sim(opportunity_path, backtest_path, candidate_path,
             bt_data = json.load(f)
         
         history = defaultdict(list)
-        with open(ws_path, "r", encoding="utf-8") as f:
+        with open(ws_path, "r", encoding="utf-8-sig") as f:
             for line in f:
                 try:
                     ev = json.loads(line)
@@ -48,7 +49,6 @@ def run_soft_score_net_edge_sim(opportunity_path, backtest_path, candidate_path,
             slippage_rate = cfg.get("risk", {}).get("slippage_pct", 0.05) / 100.0
     except: pass
 
-    # Analyze ALL candidates from all_results
     all_results = bt_data.get("all_results", [])
     candidates = [r for r in all_results if r.get("total_score", 0) >= 60]
     
@@ -98,26 +98,18 @@ def run_soft_score_net_edge_sim(opportunity_path, backtest_path, candidate_path,
         costs_total_pct = (fee_rate * 2 * 100) + (spread_cost_pct) + (slippage_rate * 100)
         
         cand_perf = {
-            "market": m,
-            "ts": t_entry,
-            "score": score,
-            "p_entry": p_entry,
-            "costs_pct": costs_total_pct,
-            "windows": {}
+            "market": m, "ts": t_entry, "score": score, "p_entry": p_entry,
+            "costs_pct": costs_total_pct, "windows": {}
         }
         
         for w, p_exit in p_exits.items():
             gross_pnl = (p_exit - p_entry) / p_entry * 100
             net_pnl = gross_pnl - costs_total_pct
             cand_perf["windows"][w] = {
-                "gross": round(gross_pnl, 4),
-                "net": round(net_pnl, 4),
-                "win": net_pnl > 0
+                "gross": round(gross_pnl, 4), "net": round(net_pnl, 4), "win": net_pnl > 0
             }
-        
         sim_results.append(cand_perf)
 
-    # Threshold comparison logic
     thresh_summary = {}
     for thresh in [60, 70, 80]:
         t_cands = [r for r in sim_results if r["score"] >= thresh]
@@ -133,42 +125,34 @@ def run_soft_score_net_edge_sim(opportunity_path, backtest_path, candidate_path,
         thresh_summary[str(thresh)] = w_stats
 
     report = {
-        "ok": True,
-        "generated_at": datetime.now().isoformat(),
+        "ok": True, "generated_at": datetime.now().isoformat(),
         "total_candidates_analyzed": len(sim_results),
-        "missing_future_price_count": missing_future_price_count,
-        "valid_future_price_count": valid_future_price_count,
-        "avg_future_tick_count": (total_tick_count / (valid_future_price_count * 5)) if valid_future_price_count > 0 else 0,
-        "threshold_comparison": thresh_summary,
-        "top_20_sample": sim_results[:20]
+        "threshold_comparison": thresh_summary
     }
 
-    os.makedirs(os.path.dirname(output_json), exist_ok=True)
-    with open(output_json, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2)
+    report_io.write_json_report(output_json, report)
 
-    os.makedirs(os.path.dirname(output_txt), exist_ok=True)
-    with open(output_txt, "w", encoding="utf-8") as f:
-        f.write("=== Soft Score Net Edge Simulation Report (All Candidates) ===\n")
-        f.write(f"Generated At: {report['generated_at']}\n")
-        f.write(f"Total Candidates (>= 60): {len(sim_results)}개\n")
-        f.write(f"Valid Candidates Analyzed: {valid_future_price_count}개\n")
-        f.write(f"Missing Future Price: {missing_future_price_count}개\n\n")
+    lines = []
+    lines.append("=== Soft Score Net Edge Simulation Report (All Candidates) ===")
+    lines.append(f"Generated At: {report['generated_at']}")
+    lines.append(f"Total Candidates (>= 60): {len(sim_results)}개")
+    lines.append(f"Valid Candidates Analyzed: {valid_future_price_count}개")
+    lines.append(f"Missing Future Price: {missing_future_price_count}개\n")
+    
+    for thresh in [60, 70, 80]:
+        lines.append(f"--- [Threshold {thresh} Stats] ---")
+        stats = thresh_summary[str(thresh)]
+        lines.append(f"Candidate Count: {stats['5s']['count']}개")
+        for w in [5, 10, 15, 30, 60]:
+            s = stats[f"{w}s"]
+            lines.append(f"  {w}s: WinRate {s['win_rate']:.2f}%, AvgNetPnL {s['avg_net_pnl']:.4f}%")
+        lines.append("")
         
-        for thresh in [60, 70, 80]:
-            f.write(f"--- [Threshold {thresh} Stats] ---\n")
-            stats = thresh_summary[str(thresh)]
-            f.write(f"Candidate Count: {stats['5s']['count']}개\n")
-            for w in [5, 10, 15, 30, 60]:
-                s = stats[f"{w}s"]
-                f.write(f"  {w}s: WinRate {s['win_rate']:.2f}%, AvgNetPnL {s['avg_net_pnl']:.4f}%\n")
-            f.write("\n")
-            
-        f.write("--- [Note] ---\n")
-        f.write("1. Statistics above are based on ALL candidates matching each threshold.\n")
-        f.write("2. The Top 20 samples in JSON are for reference only.\n")
-        f.write("3. [CAUTION] Config is not automatically updated.\n")
+    lines.append("--- [Note] ---")
+    lines.append("1. Statistics above are based on ALL candidates matching each threshold.")
+    lines.append("2. [CAUTION] Config is not automatically updated.")
 
+    report_io.write_text_report(output_txt, "\n".join(lines))
     return report
 
 if __name__ == "__main__":
