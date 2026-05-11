@@ -61,6 +61,7 @@ def main() -> None:
             "combined-filter-optimizer",
             "market-factor-threshold-calibrator",
             "combined-filter-exit-simulator",
+            "reversal-edge-diagnostics",
         ],
         help="실행할 명령",
     )
@@ -639,6 +640,15 @@ def main() -> None:
             output_json=args.output_json,
             output_txt=args.output_txt,
             candidate_output=args.candidate_output,
+        )
+
+    elif args.command == "reversal-edge-diagnostics":
+        from .reversal_edge_diagnostics import run_reversal_edge_diagnostics
+        
+        result = run_reversal_edge_diagnostics(
+            ws_path=args.ws,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
         )
 
     else:
