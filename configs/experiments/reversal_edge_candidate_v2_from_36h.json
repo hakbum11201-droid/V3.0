@@ -1,0 +1,65 @@
+{
+  "name": "reversal_edge_candidate_v2_from_36h",
+  "mode": "paper_experiment_only",
+  "description": "Calibrated parameters for absorption rebound based on 36h data",
+  "holding_windows_sec": [
+    300,
+    600
+  ],
+  "preferred_holding_window_sec": 600,
+  "cost_floor_pct": 0.2,
+  "threshold_candidates": [
+    60,
+    70,
+    80
+  ],
+  "reversal_conditions": {
+    "require_negative_price_chg_10s": true,
+    "max_price_chg_10s": -0.001,
+    "min_sell_buy_ratio_10s": 1.5,
+    "min_bid_ask_depth_ratio_5": 0.5,
+    "max_spread_pct": 0.08,
+    "min_volatility_300s_pct": 0.05
+  },
+  "weights": {
+    "negative_price_chg_score": 25,
+    "sell_pressure_score": 25,
+    "sell_buy_ratio_score": 20,
+    "bid_depth_support_score": 20,
+    "spread_safety_score": 15,
+    "volatility_score": 15,
+    "market_sync_score": 10
+  },
+  "market_focus": {
+    "allow_static_market_focus": true,
+    "static_focus_markets": [
+      "KRW-SOL"
+    ],
+    "compare_modes": [
+      "ALL_MARKETS",
+      "STATIC_SOL_ONLY",
+      "DYNAMIC_LEADER"
+    ]
+  },
+  "exit_test_candidates": {
+    "take_profit_pct": [
+      0.2,
+      0.25,
+      0.3,
+      0.4
+    ],
+    "stop_loss_pct": [
+      -0.1,
+      -0.15,
+      -0.2,
+      -0.3
+    ],
+    "timeout_sec": [
+      300,
+      600
+    ]
+  },
+  "requires_net_edge_positive": true,
+  "requires_ddm_normal": true,
+  "auto_apply": false
+}

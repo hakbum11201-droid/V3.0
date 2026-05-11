@@ -63,6 +63,7 @@ def main() -> None:
             "combined-filter-exit-simulator",
             "reversal-edge-diagnostics",
             "reversal-edge-backtest",
+            "reversal-edge-threshold-calibrator",
         ],
         help="실행할 명령",
     )
@@ -660,6 +661,17 @@ def main() -> None:
             candidate_path=args.candidate,
             output_json=args.output_json,
             output_txt=args.output_txt,
+        )
+
+    elif args.command == "reversal-edge-threshold-calibrator":
+        from .reversal_edge_threshold_calibrator import run_reversal_edge_threshold_calibrator
+        
+        result = run_reversal_edge_threshold_calibrator(
+            ws_path=args.ws,
+            candidate_path=args.candidate,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+            candidate_output=args.candidate_output,
         )
 
     else:
