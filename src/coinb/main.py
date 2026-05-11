@@ -59,6 +59,7 @@ def main() -> None:
             "market-focus-diagnostics",
             "combined-filter-backtest",
             "combined-filter-optimizer",
+            "market-factor-threshold-calibrator",
         ],
         help="실행할 명령",
     )
@@ -273,6 +274,11 @@ def main() -> None:
     parser.add_argument(
         "--market-focus",
         help="Market Focus Filter 후보 설정 파일 경로",
+    )
+
+    parser.add_argument(
+        "--candidate-output",
+        help="생성될 후보 설정 파일 경로",
     )
 
     args = parser.parse_args()
@@ -610,6 +616,16 @@ def main() -> None:
             trend_candidate_path=args.trend_candidate,
             output_json=args.output_json,
             output_txt=args.output_txt,
+        )
+
+    elif args.command == "market-factor-threshold-calibrator":
+        from .market_factor_threshold_calibrator import run_market_factor_threshold_calibrator
+        
+        result = run_market_factor_threshold_calibrator(
+            market_factor_path=args.market_factor,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
+            candidate_output=args.candidate_output,
         )
 
     else:

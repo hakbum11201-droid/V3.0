@@ -1,0 +1,18 @@
+{
+  "name": "market_factor_filter_candidate_v2_from_36h",
+  "mode": "paper_experiment_only",
+  "description": "Auto-calibrated from 36h diagnostics",
+  "market_factor_filter": {
+    "min_volatility_300s_pct": 0.04,
+    "min_imbalance_300s": 0.0045,
+    "min_bid_ask_depth_ratio_5": 0.91,
+    "max_spread_pct": 0.1,
+    "min_depth_total_5": 1.0
+  },
+  "apply_after": [],
+  "apply_before": [
+    "market_focus_filter"
+  ],
+  "requires_net_edge_positive": true,
+  "auto_apply": false
+}
