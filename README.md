@@ -136,7 +136,10 @@ Paper Engine은 디스크 공간을 관리하기 위해 아래와 같이 로테�
 ## Next Phase: UI + DDM Roadmap
 
 다음 개발 단계인 개인용 관제 UI, DDM(Drawdown Defense Manager) 및 계좌/성과 추적 계획은 아래 문서에서 확인할 수 있습니다.
-- [docs/V3_UI_DDM_ROADMAP_KR.md](docs/V3_UI_DDM_ROADMAP_KR.md)
+- [docs/README_DOCS_KR.md](docs/README_DOCS_KR.md) - 전체 문서 체계 및 우선순위
+- [docs/CURRENT_RESEARCH_STATE_KR.md](docs/CURRENT_RESEARCH_STATE_KR.md) - Reversal Edge v2 등 최신 연구 현황
+- [docs/V3_UI_DDM_ROADMAP_KR.md](docs/V3_UI_DDM_ROADMAP_KR.md) - UI 및 리스크 관리 로드맵
+- [docs/HIGHER_TIMEFRAME_REGIME_FILTER_PLAN_KR.md](docs/HIGHER_TIMEFRAME_REGIME_FILTER_PLAN_KR.md) - 시장 레짐 필터 설계 계획
 
 ---
 
