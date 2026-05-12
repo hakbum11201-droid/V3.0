@@ -64,6 +64,7 @@ def main() -> None:
             "reversal-edge-diagnostics",
             "reversal-edge-backtest",
             "reversal-edge-threshold-calibrator",
+            "reversal-edge-paper-runner",
         ],
         help="실행할 명령",
     )
@@ -259,6 +260,11 @@ def main() -> None:
         "--market-filter",
         help="Market Factor Filter 후보 설정 파일 경로",
     )
+
+    parser.add_argument("--duration-sec", type=int, default=21600, help="Paper Runner 실행 시간(초)")
+    parser.add_argument("--mode", type=str, default="STATIC_SOL_ONLY", help="Paper Runner 모드")
+    parser.add_argument("--output-events", help="Paper WS 로그 출력 경로")
+    parser.add_argument("--output-trades", help="Paper 진입/청산 로그 출력 경로")
 
     parser.add_argument(
         "--trend-candidate",
@@ -672,6 +678,19 @@ def main() -> None:
             output_json=args.output_json,
             output_txt=args.output_txt,
             candidate_output=args.candidate_output,
+        )
+
+    elif args.command == "reversal-edge-paper-runner":
+        from .reversal_edge_paper_runner import run_reversal_edge_paper_runner
+        
+        result = run_reversal_edge_paper_runner(
+            candidate_path=args.candidate,
+            duration_sec=args.duration_sec,
+            mode=args.mode,
+            output_events=args.output_events,
+            output_trades=args.output_trades,
+            output_json=args.output_json,
+            output_txt=args.output_txt,
         )
 
     else:
