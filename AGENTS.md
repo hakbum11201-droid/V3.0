@@ -1,7 +1,8 @@
 # AGENTS.md
 
 ## 1. 문서 우선순위 원칙
-작업 전 반드시 `docs/README_DOCS_KR.md`를 먼저 확인한다. 문서 간 내용이 충돌할 경우 아래 순서를 엄격히 따른다.
+작업 전 반드시 `docs/README_DOCS_KR.md`를 먼저 확인한다. 
+문서 간 내용이 충돌할 경우 아래 순서를 엄격히 따른다.
 
 1. `docs/V3_LIVE_TRADING_MASTER_PLAN_KR.md` (최상위 목표/철학)
 2. `docs/DevState.md` (진행 상태)
@@ -38,6 +39,7 @@ python tools/secret_guard.py
 ---
 
 ## 3. 세부 설계 지침
+
 ### UI / DDM 원칙
 - 모든 대시보드 및 관제 UI 계획은 `docs/V3_UI_DDM_ROADMAP_KR.md`를 따른다.
 - Drawdown 발생 시 신규 진입을 자동으로 차단하는 DDM 로직의 무결성을 최우선으로 한다.
@@ -45,3 +47,11 @@ python tools/secret_guard.py
 ### 보안 지침
 - API Key, GitHub 공개 저장소 관리 기준은 `docs/SECURITY_KEY_POLICY_KR.md`를 준수한다.
 - `secret_guard.py` 검증을 통과하지 못한 코드는 커밋하지 않는다.
+
+---
+
+## 4. 작업 제한 사항
+- `live.enabled=true` 자동 변경 금지.
+- 주문 로직 수정 시 반드시 단위 테스트를 수반해야 함.
+- 외부 라이브러리 추가 시 `requirements.txt` 업데이트 필수.
+- AI 도구 사용 시 프로젝트의 최상위 철학을 위배하지 않도록 주의.
