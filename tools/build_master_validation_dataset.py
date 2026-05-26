@@ -17,7 +17,10 @@ from collections import defaultdict
 # =============================================================================
 INPUT_GLOBS = [
     "logs/experiments/master_sources/*.jsonl",
-    "logs/paper/*.jsonl"
+    "logs/paper/*.jsonl",
+    "logs/experiments/*_ws_events.jsonl",
+    # Top 10 KRW 72h chunk collector 수집 데이터 (chunk 번호 파일만, manifest 제외)
+    "logs/experiments/top10_krw_72h_chunks/top10_krw_chunk_[0-9][0-9][0-9][0-9].jsonl",
 ]
 
 EXCLUDE_PATTERNS = [
@@ -25,10 +28,14 @@ EXCLUDE_PATTERNS = [
     "_merged_pipeline.",
     "reports/",
     "__pycache__",
-    ".pyc"
+    ".pyc",
+    "logs/experiments/master/",
+    "logs/experiments/chunks_test/",
+    "temp_",
+    "top10_krw_chunk_manifest",  # Manifest 파일 제외 (데이터 아님)
 ]
 
-HOLDOUT_KEYWORDS = ["holdout", "72h"]
+HOLDOUT_KEYWORDS = ["holdout", "72h_holdout"]
 
 OUT_DIR = "logs/experiments/master"
 REPORTS_DIR = "reports/experiments"

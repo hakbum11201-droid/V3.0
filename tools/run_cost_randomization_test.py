@@ -9,7 +9,14 @@ Reversal Edge v2 전략의 순수익이 작아 슬리피지/체결 비용이 증
 import os
 import json
 import subprocess
+import sqlite3
+import argparse
 from datetime import datetime
+
+# Import cache_manager
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import cache_manager
 
 # =============================================================================
 # Constants & Configuration
@@ -38,20 +45,56 @@ COST_SCENARIOS = [
 # Functions
 # =============================================================================
 
-def find_input_file(filepaths):
+def find_input_file_or_cache(filepaths, market_filter="ALL"):
+    cache_path = "logs/experiments/master/reversal_edge_master_dataset.sqlite"
+    used_cache = False
+    temp_jsonl = "logs/experiments/temp_cost_randomization.jsonl"
+    
+    if os.path.exists(cache_path):
+        print(f"[Info] Found SQLite cache at {cache_path}. Extracting data...")
+        try:
+            conn = sqlite3.connect(cache_path)
+            cursor = conn.cursor()
+            if market_filter == "ALL":
+                cursor.execute("SELECT raw_json FROM events ORDER BY ts ASC")
+            else:
+                cursor.execute("SELECT raw_json FROM events WHERE market=? ORDER BY ts ASC", (market_filter,))
+                
+            rows = cursor.fetchall()
+            lines = len(rows)
+            
+            with open(temp_jsonl, "w", encoding="utf-8") as f:
+                for row in rows:
+                    f.write(row[0] + "\n")
+                    
+            conn.close()
+            print(f"[Info] Extracted {lines} rows from cache to {temp_jsonl}")
+            return temp_jsonl, lines, True
+        except Exception as e:
+            print(f"[Warning] Failed to use SQLite cache: {e}. Falling back to JSONL.")
+            
     for fp in filepaths:
         if os.path.exists(fp) and os.path.getsize(fp) > 0:
             lines = 0
             try:
-                with open(fp, "r", encoding="utf-8") as f:
-                    for line in f:
-                        if line.strip():
+                with open(temp_jsonl, "w", encoding="utf-8") as out_f:
+                    with open(fp, "r", encoding="utf-8") as f:
+                        for line in f:
+                            if not line.strip(): continue
+                            if market_filter != "ALL":
+                                try:
+                                    data = json.loads(line)
+                                    market = data.get("market") or data.get("code") or (data.get("raw", {}).get("code"))
+                                    if market != market_filter: continue
+                                except: pass
+                            out_f.write(line)
                             lines += 1
-            except Exception:
+            except Exception as e:
+                print(f"[Warning] Error filtering {fp}: {e}")
                 pass
             if lines > 0:
-                return fp, lines
-    return None, 0
+                return temp_jsonl, lines, False
+    return None, 0, False
 
 def run_base_backtest(input_jsonl):
     out_json = os.path.join(REPORTS_DIR, "cost_randomization_base_summary.json")
@@ -84,18 +127,29 @@ def run_base_backtest(input_jsonl):
         return None
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--market", default="ALL", help="Specific market to filter, default ALL")
+    args = parser.parse_args()
+    
     print("============================================================")
     print(" Cost Randomization Test for Reversal Edge v2")
+    print(f" Market Filter: {args.market}")
     print("============================================================")
     
     os.makedirs(REPORTS_DIR, exist_ok=True)
     
-    # 1. Find Data
-    input_file, total_lines = find_input_file(INPUT_JSONL_FILES)
+    # 0. Ensure cache is valid
+    print("[Info] Checking Master Dataset Cache...")
+    cache_success, cache_reason = cache_manager.ensure_cache()
+    if not cache_success:
+        print(f"[Warning] Cache manager returned {cache_reason}. Will attempt fallback to JSONL.")
     
-    if not input_file:
+    # 1. Find Data
+    input_file, total_lines, used_cache = find_input_file_or_cache(INPUT_JSONL_FILES, args.market)
+    
+    if not input_file or total_lines == 0:
         print("[Error] No valid input events loaded. Cannot perform test.")
-        _write_empty_summary("파일을 찾을 수 없거나 파일 내용이 비어있습니다.", None, 0)
+        _write_empty_summary("파일을 찾을 수 없거나 파일 내용이 비어있습니다.", None, 0, False, args.market)
         return
         
     # 2. Run Baseline Backtest
@@ -103,7 +157,7 @@ def main():
     
     if not base_summary:
         print("[Error] Baseline backtest failed.")
-        _write_empty_summary("Baseline 백테스트 실행에 실패했습니다.", input_file, total_lines)
+        _write_empty_summary("Baseline 백테스트 실행에 실패했습니다.", input_file, total_lines, used_cache, args.market)
         return
         
     trades = base_summary.get("total_trades", base_summary.get("paper_entries", 0))
@@ -112,7 +166,7 @@ def main():
     
     if trades == 0:
         print("[Info] No trades occurred. Need more data.")
-        _write_empty_summary("파일은 읽었으나, 거래가 발생하지 않았습니다. (Trades = 0)", input_file, total_lines)
+        _write_empty_summary("파일은 읽었지만 조건 미발생 (Trades = 0)", input_file, total_lines, used_cache, args.market)
         return
         
     # 3. Apply Cost Scenarios
@@ -160,6 +214,12 @@ def main():
     final_summary = {
         "generated_at": datetime.now().isoformat(),
         "input_file": input_file,
+        "used_sqlite_cache": used_cache,
+        "cache_rebuilt": cache_reason == "cache_rebuilt",
+        "cache_valid": cache_success,
+        "cache_rows": total_lines if used_cache else 0,
+        "source_jsonl_path": cache_manager.MASTER_JSONL,
+        "market_filter": args.market,
         "input_lines": total_lines,
         "candidate": INPUT_CANDIDATE,
         "final_judgement": final_judgement,
@@ -180,6 +240,12 @@ def main():
         "============================================================",
         f"생성 시각: {final_summary['generated_at']}",
         f"입력 파일: {input_file} (라인 수: {total_lines})",
+        f"SQLite 캐시 사용: {used_cache}",
+        f"자동 Rebuild 수행: {cache_reason == 'cache_rebuilt'}",
+        f"캐시 정상 판단: {cache_success}",
+        f"읽은 캐시 Row: {total_lines if used_cache else 0}",
+        f"원본 JSONL 소스: {cache_manager.MASTER_JSONL}",
+        f"Market 필터: {args.market}",
         f"사용 후보: {INPUT_CANDIDATE}",
         "",
         "[비용 시나리오별 결과]",
@@ -228,10 +294,12 @@ def main():
     print(f"\n[Done] Final Judgement: {final_judgement}")
     print(f"Report saved to: {txt_path}")
 
-def _write_empty_summary(reason, input_file=None, total_lines=0):
+def _write_empty_summary(reason, input_file=None, total_lines=0, used_cache=False, market_filter="ALL"):
     final_summary = {
         "generated_at": datetime.now().isoformat(),
         "input_file": input_file,
+        "used_sqlite_cache": used_cache,
+        "market_filter": market_filter,
         "input_lines": total_lines,
         "final_judgement": "NEED_MORE_DATA",
         "reason": reason
@@ -246,6 +314,8 @@ def _write_empty_summary(reason, input_file=None, total_lines=0):
         f.write("거래 비용 랜덤화 테스트 Report\n")
         if input_file:
             f.write(f"입력 파일: {input_file} (라인 수: {total_lines})\n")
+            f.write(f"SQLite 캐시 사용: {used_cache}\n")
+            f.write(f"Market 필터: {market_filter}\n")
         f.write(f"결과: NEED_MORE_DATA ({reason})\n")
         f.write("------------------------------------------------------------\n")
         f.write(" 🚫 실거래 반영 금지\n")

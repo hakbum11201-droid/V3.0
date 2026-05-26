@@ -19,13 +19,14 @@
 ## 3. 평가 방식
 
 1. **입력 데이터 결합 및 정렬 (우선순위 순)**:
-   - `logs/experiments/master/reversal_edge_master_dataset.jsonl` (1순위)
-   - `logs/paper/reversal_edge_v2_paper_24h_events.jsonl` (2순위)
-   - `logs/experiments/reversal_oos_chunks_merged.jsonl` (3순위)
-   - `logs/experiments/reversal_oos_chunks_test_merged.jsonl` (4순위)
-   - `logs/paper/reversal_edge_v2_paper_events.jsonl` (5순위)
+   - `logs/experiments/master/reversal_edge_master_dataset.sqlite` (SQLite 캐시가 존재할 경우 가장 먼저 로드)
+   - `logs/experiments/master/reversal_edge_master_dataset.jsonl` (캐시가 없으면 JSONL 파싱)
+   - `logs/paper/reversal_edge_v2_paper_24h_events.jsonl`
+   - `logs/experiments/reversal_oos_chunks_merged.jsonl`
+   - `logs/experiments/reversal_oos_chunks_test_merged.jsonl`
+   - `logs/paper/reversal_edge_v2_paper_events.jsonl`
    
-   위 파일들 중 존재하는 가장 높은 우선순위의 파일 하나를 읽어들여 시계열(Timeline)을 구성하고 시간(ts)순으로 정렬한다.
+   위 파일들 중 존재하는 가장 높은 우선순위의 파일 하나를 읽어들여 시계열(Timeline)을 구성하고 시간(ts)순으로 정렬한다. (대용량 JSONL 읽기 속도 문제를 해결하기 위해 `cache_manager`를 통해 SQLite 캐시를 최우선으로 활용하며, 원본 변경 시 자동으로 캐시를 갱신한다.)
 
 2. **Fold (검증 구간) 분할**:
    - `Train Window = 36시간`, `Test Window = 24시간`, `Step = 24시간`

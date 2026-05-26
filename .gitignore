@@ -54,3 +54,22 @@ credentials.json
 !config/
 !docs/
 !tests/
+
+
+# Added by Quarantine Script
+_cleanup_quarantine/
+_review_snapshot_*/
+_review_snapshot_*.zip
+_cleanup_audit_*/
+_cleanup_audit_*.zip
+*.pyc
+*.sqlite
+*.db
+*.jsonl
+
+# Local cleanup/audit helper outputs
+docs/project/
+tools/execute_quarantine.py
+tools/restore_recommended.py
+tools/review_tracked_deletions.py
+tools/audit_project_cleanup.py

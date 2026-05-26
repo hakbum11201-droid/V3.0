@@ -2,9 +2,11 @@
 generate_auto_research_report.py
 Auto Research Report Generator.
 
-Reads backtest, OOS chunk, and paper summary results.
-Synthesizes the data into a single structured report.
-Determines the current status and recommends the next action.
+Reads backtest, OOS chunk, paper summary, cross-market discovery and
+validation results to produce a single structured research report.
+
+NOTE: This script does NOT modify any config / candidate / live files.
+      Strategy confirmation is strictly prohibited at this stage.
 """
 
 import glob
@@ -151,6 +153,19 @@ def main():
         else:
             report_data["files_read"][key] = "없음"
 
+    # ── Cross-market discovery & validation ──────────────────────────────────
+    cross_market_files = {
+        "cross_market_discovery":  "reports/experiments/cross_market_feature_discovery_latest.json",
+        "cross_market_validation": "reports/experiments/cross_market_validation_latest.json",
+    }
+    for key, path in cross_market_files.items():
+        if os.path.exists(path):
+            report_data["files_read"][key]   = path
+            report_data["summary"][key]       = load_json(path)
+        else:
+            report_data["files_read"][key]   = "없음"
+            report_data["summary"][key]       = {}
+
     # Evaluate action
     paper_data = report_data["summary"]["paper"]
     oos_data = report_data["summary"].get("walk_forward", {})
@@ -164,6 +179,16 @@ def main():
     # Generate JSON output
     out_json = "reports/experiments/auto_research_report_latest.json"
     os.makedirs(os.path.dirname(out_json), exist_ok=True)
+    # Inject cross-market summary keys so JSON consumers can find them
+    report_data["cross_market_pipeline"] = {
+        "discovery_judgement":  report_data["summary"].get("cross_market_discovery",  {}).get("judgement", "N/A"),
+        "validation_judgement": report_data["summary"].get("cross_market_validation", {}).get("judgement", "N/A"),
+        "common_feature_candidates": report_data["summary"].get("cross_market_discovery", {}).get("common_feature_candidates", []),
+        "valid_markets_count":  report_data["summary"].get("cross_market_validation", {}).get("aggregate_results", {}).get("valid_markets_count", 0),
+        "total_snapshots":      report_data["summary"].get("cross_market_validation", {}).get("aggregate_results", {}).get("total_snapshots", 0),
+        "timeout_ratio":        report_data["summary"].get("cross_market_validation", {}).get("aggregate_results", {}).get("timeout_ratio", 0.0),
+        "paper_validated":      False,   # paper validation not yet performed
+    }
     with open(out_json, "w", encoding="utf-8") as f:
         json.dump(report_data, f, ensure_ascii=False, indent=2)
 
@@ -172,19 +197,19 @@ def main():
         "============================================================",
         "  CoinB Auto Research Report",
         "============================================================",
-        f"생성 시각: {report_data['generated_at']}",
+        f"Generated  : {report_data['generated_at']}",
         "",
-        "[현재 전략 후보]",
-        f" - 전략    : {report_data['candidate']['strategy']}",
-        f" - 파일    : {report_data['candidate']['candidate_file']}",
-        f" - 모드    : {report_data['candidate']['mode']}",
-        f" - 마켓    : {report_data['candidate']['market']}",
-        f" - TP      : {report_data['candidate']['tp']}",
-        f" - SL      : {report_data['candidate']['sl']}",
-        f" - Timeout : {report_data['candidate']['timeout']}",
-        f" - Cost Flr: {report_data['candidate']['cost_floor']}",
+        "[Current Strategy Candidate]",
+        f" - Strategy  : {report_data['candidate']['strategy']}",
+        f" - File      : {report_data['candidate']['candidate_file']}",
+        f" - Mode      : {report_data['candidate']['mode']}",
+        f" - Market    : {report_data['candidate']['market']}",
+        f" - TP        : {report_data['candidate']['tp']}",
+        f" - SL        : {report_data['candidate']['sl']}",
+        f" - Timeout   : {report_data['candidate']['timeout']}",
+        f" - Cost Floor: {report_data['candidate']['cost_floor']}",
         "",
-        "[읽은 파일 목록]"
+        "[Files Read]"
     ]
     
     for k, v in report_data["files_read"].items():
@@ -192,7 +217,7 @@ def main():
 
     lines.extend([
         "",
-        "[핵심 결과]"
+        "[Key Results]"
     ])
     
     if paper_data:
@@ -204,14 +229,14 @@ def main():
         
         lines.extend([
             " (Paper)",
-            f"   * Trades 수    : {trades}",
-            f"   * Net PnL (%)  : {net_pnl:.4f}",
+            f"   * Trades      : {trades}",
+            f"   * Net PnL (%) : {net_pnl:.4f}",
             f"   * Win Rate (%) : {win_rate:.2f}",
-            f"   * SL hit       : {sl_count}",
-            f"   * Timeout hit  : {timeout_count}"
+            f"   * SL hit      : {sl_count}",
+            f"   * Timeout hit : {timeout_count}"
         ])
     else:
-        lines.append(" (Paper) 데이터 없음")
+        lines.append(" (Paper) No data")
 
     lines.append(" (Validation Pipeline)")
     
@@ -235,16 +260,75 @@ def main():
 
     lines.extend([
         "",
-        "[Promotion Guard / 다음 행동]",
+        "[Cross-Market Discovery & Validation Pipeline]",
+    ])
+    disc  = report_data["summary"].get("cross_market_discovery", {})
+    valid = report_data["summary"].get("cross_market_validation", {})
+    agg   = valid.get("aggregate_results", {})
+
+    if disc:
+        cands = disc.get("common_feature_candidates", [])
+        lines.extend([
+            f" Discovery judgement   : {disc.get('judgement', 'N/A')}",
+            f" Valid markets         : {disc.get('valid_markets_count', disc.get('valid_markets_total', 'N/A'))}",
+            f" Total snapshots       : {disc.get('total_snapshots', 'N/A')}",
+            f" Common feature cands  : {cands if cands else '(none)'}",
+        ])
+        feats = disc.get("feature_top10", [])[:5]
+        if feats:
+            lines.append(" Top features (|d|)   :")
+            for ft in feats:
+                lines.append(
+                    f"   - {ft['feature']:<30} d={ft['effect_size']:+.4f}"
+                    f"  mkts={ft['consistent_markets']}/{ft['valid_markets_total']}"
+                )
+    else:
+        lines.append(" Discovery: No result")
+
+    if valid:
+        to_ratio = agg.get("timeout_ratio", 0.0)
+        top_combo = valid.get("feature_combination_results", [])
+        lines.extend([
+            "",
+            f" Validation judgement  : {valid.get('judgement', 'N/A')}",
+            f" Valid markets         : {agg.get('valid_markets_count', 'N/A')} / {len(agg.get('valid_markets', []))}",
+            f" Snapshots(W/L/TO)     : {agg.get('total_snapshots', 0):,}"
+            f" ({agg.get('total_win',0)}/{agg.get('total_loss',0)}/{agg.get('total_timeout',0)})",
+            f" Timeout ratio         : {to_ratio:.1%}",
+        ])
+        if top_combo:
+            best = top_combo[0]
+            lines.append(
+                f" Best combo (d)        : {best['features']}  d={best['effect_size']:.4f}"
+            )
+        val_warns = valid.get("warnings", [])
+        if val_warns:
+            lines.append(" Validation warnings  :")
+            for w in val_warns[:3]:
+                lines.append(f"   ! {w}")
+    else:
+        lines.append(" Validation: No result")
+
+    lines.extend([
+        "",
+        "[Current Stage Assessment]",
+        " - Paper validation : NOT YET PERFORMED",
+        " - Strategy lock-in : PROHIBITED (before paper validation)",
+        " - Next step        : Paper candidate design review (not confirmed)",
+        " - Feature combos above are REVIEW CANDIDATES only — not for live trading",
+        "",
+        "[Promotion Guard / Next Action]",
         f" ACTION : {action}",
         f" REASON : {reason}",
         "",
         "------------------------------------------------------------",
-        " [안전 경고 및 금지 사항]",
-        " 🚫 실거래 반영 금지",
-        " 🚫 live.enabled=false 유지",
-        " 🚫 config 자동 반영 금지",
-        " 🚫 사람 승인 전 tiny_live 금지",
+        " [Safety Constraints]",
+        " NO  live order execution",
+        " NO  live.enabled=true",
+        " NO  auto config update",
+        " NO  tiny_live without human approval",
+        " NO  auto candidate generation",
+        " NO  treating feature combos as confirmed strategy",
         "------------------------------------------------------------"
     ])
 

@@ -9,7 +9,14 @@ import os
 import json
 import subprocess
 import glob
+import sqlite3
+import argparse
 from datetime import datetime
+
+# Import cache_manager
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import cache_manager
 
 # =============================================================================
 # Constants & Configuration
@@ -45,13 +52,43 @@ def get_timestamp(data):
                 return float(data["raw"][key])
     return None
 
-def load_and_sort_events(filepaths):
-    """Load events from the highest priority file that has data."""
+def load_and_sort_events(filepaths, market_filter="ALL"):
+    """Load events from SQLite cache if available, else fallback to JSONL files."""
     events = []
     used_file = None
     parsed_success = 0
     total_lines = 0
+    used_cache = False
     
+    cache_path = "logs/experiments/master/reversal_edge_master_dataset.sqlite"
+    if os.path.exists(cache_path):
+        print(f"[Info] Found SQLite cache. Reading from {cache_path}...")
+        try:
+            conn = sqlite3.connect(cache_path)
+            cursor = conn.cursor()
+            if market_filter == "ALL":
+                cursor.execute("SELECT ts, raw_json FROM events ORDER BY ts ASC")
+            else:
+                cursor.execute("SELECT ts, raw_json FROM events WHERE market=? ORDER BY ts ASC", (market_filter,))
+            
+            rows = cursor.fetchall()
+            for row in rows:
+                events.append((row[0], row[1]))
+            
+            total_lines = len(rows)
+            parsed_success = len(rows)
+            used_file = cache_path
+            used_cache = True
+            conn.close()
+            print(f"[Info] Total rows read from cache: {total_lines}")
+            return events, used_file, total_lines, parsed_success, used_cache
+        except Exception as e:
+            print(f"[Warning] Failed to read from SQLite cache: {e}. Falling back to JSONL.")
+            events = []
+            total_lines = 0
+            parsed_success = 0
+            used_cache = False
+            
     for fp in filepaths:
         if not os.path.exists(fp) or os.path.getsize(fp) == 0:
             print(f"[Info] File not found or empty, skipping: {fp}")
@@ -67,6 +104,11 @@ def load_and_sort_events(filepaths):
                     total_lines += 1
                     try:
                         data = json.loads(line)
+                        if market_filter != "ALL":
+                            market = data.get("market") or data.get("code") or (data.get("raw", {}).get("code"))
+                            if market != market_filter:
+                                continue
+                                
                         ts = get_timestamp(data)
                         if ts is not None:
                             # Normalize MS timestamps if necessary
@@ -86,7 +128,7 @@ def load_and_sort_events(filepaths):
     print(f"[Info] Total lines read: {total_lines}, Parsed success: {parsed_success}")
     if events:
         events.sort(key=lambda x: x[0])
-    return events, used_file, total_lines, parsed_success
+    return events, used_file, total_lines, parsed_success, used_cache
 
 
 def run_backtest_on_fold(fold_idx, test_jsonl_path):
@@ -138,15 +180,26 @@ def determine_fold_status(fold_summary, test_event_count):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--market", default="ALL", help="Specific market to filter, default ALL")
+    args = parser.parse_args()
+    
     print("============================================================")
     print(" Walk-forward Validation for Reversal Edge")
+    print(f" Market Filter: {args.market}")
     print("============================================================")
     
     os.makedirs(OUT_DIR, exist_ok=True)
     os.makedirs(REPORTS_DIR, exist_ok=True)
     
+    # 0. Ensure cache is valid
+    print("[Info] Checking Master Dataset Cache...")
+    cache_success, cache_reason = cache_manager.ensure_cache()
+    if not cache_success:
+        print(f"[Warning] Cache manager returned {cache_reason}. Will attempt fallback to JSONL.")
+    
     # 1. Load data
-    events, used_file, total_lines, parsed_success = load_and_sort_events(INPUT_JSONL_FILES)
+    events, used_file, total_lines, parsed_success, used_cache = load_and_sort_events(INPUT_JSONL_FILES, args.market)
     if not events:
         print("[Error] No events loaded. Cannot perform validation.")
         _write_empty_summary()
@@ -156,7 +209,7 @@ def main():
     max_ts = events[-1][0]
     total_duration = max_ts - min_ts
     
-    print(f"[Info] Using file: {used_file}")
+    print(f"[Info] Using file: {used_file} (Cache: {used_cache})")
     print(f"[Info] Time range: {datetime.fromtimestamp(min_ts)} ~ {datetime.fromtimestamp(max_ts)}")
     print(f"[Info] Total duration: {total_duration/3600:.2f} hours")
     
@@ -263,6 +316,12 @@ def main():
     final_summary = {
         "generated_at": datetime.now().isoformat(),
         "used_input_file": used_file,
+        "used_sqlite_cache": used_cache,
+        "cache_rebuilt": cache_reason == "cache_rebuilt",
+        "cache_valid": cache_success,
+        "cache_rows": total_lines if used_cache else 0,
+        "source_jsonl_path": cache_manager.MASTER_JSONL,
+        "market_filter": args.market,
         "total_lines_read": total_lines,
         "parsed_success": parsed_success,
         "time_range_start": datetime.fromtimestamp(min_ts).isoformat(),
@@ -292,7 +351,13 @@ def main():
         "",
         "[입력 데이터 파싱 요약]",
         f" - 사용된 파일: {used_file}",
-        f" - 총 라인 수 : {total_lines}",
+        f" - SQLite 캐시 사용: {used_cache}",
+        f" - 자동 Rebuild 수행: {cache_reason == 'cache_rebuilt'}",
+        f" - 캐시 정상 판단: {cache_success}",
+        f" - 읽은 캐시 Row: {total_lines if used_cache else 0}",
+        f" - 원본 JSONL 소스: {cache_manager.MASTER_JSONL}",
+        f" - Market 필터: {args.market}",
+        f" - 총 로우 수 : {total_lines}",
         f" - 파싱 성공  : {parsed_success}",
         f" - 시간 범위  : {datetime.fromtimestamp(min_ts)} ~ {datetime.fromtimestamp(max_ts)}",
         "",
